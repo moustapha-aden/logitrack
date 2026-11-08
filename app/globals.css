@@ -1,26 +1,104 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Palette LogiTrack */
+  --color-navy-950: #0a1424;
+  --color-navy-900: #101e35;
+  --color-navy-800: #172a4a;
+  --color-navy-700: #213a63;
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-success-50: #e7f7f3;
+  --color-success-100: #c9eee4;
+  --color-success-600: #0f9f83;
+  --color-success-700: #0b8069;
+  --color-ink: #1e293b;
+  --color-canvas: #f8fafc;
+
+  --shadow-card: 0 1px 2px rgb(16 30 53 / 0.04), 0 1px 3px rgb(16 30 53 / 0.06);
+  --shadow-pop: 0 10px 30px -10px rgb(16 30 53 / 0.25), 0 4px 10px -4px rgb(16 30 53 / 0.1);
+
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-up: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-slide-in-right: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-scale-in: scale-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Barres de défilement discrètes */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.5) transparent;
+}
+
+/* Leaflet : intégration visuelle */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #e9eef5;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+}
+.leaflet-popup-content {
+  margin: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.truck-marker {
+  background: transparent;
+  border: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Tuiles OSM adoucies pour s'accorder à la charte */
+.leaflet-tile-pane {
+  filter: saturate(0.55) brightness(1.04) contrast(0.95);
+}
+
+/* Les éléments de grille ne doivent jamais s'élargir au-delà de leur piste
+   (graphiques, tableaux et carrousels restent contenus sur mobile) */
+.grid > * {
+  min-width: 0;
 }

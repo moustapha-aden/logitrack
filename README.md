@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LogiTrack — Pilotez vos transports. Maîtrisez votre logistique.
 
-## Getting Started
+Prototype de démonstration d'une plateforme de gestion du transport routier, du transit et de la logistique à Djibouti.
+**Toutes les données sont fictives.** Pas de backend, pas d'authentification réelle : l'état est géré côté client et conservé dans le `localStorage` du navigateur.
 
-First, run the development server:
+## Démarrer
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
+npm run build      # build de production
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Espaces et routes
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Espace | Routes |
+| --- | --- |
+| Présentation / connexion | `/`, `/login`, `/credits` |
+| Administration | `/dashboard`, `/entreprises`, `/transporteurs`, `/camions`, `/chauffeurs`, `/missions`, `/chargements`, `/operations`, `/incidents`, `/rapports`, `/notifications`, `/parametres` |
+| Entreprise | `/entreprise`, `/entreprise/camions`, `/entreprise/chauffeurs`, `/entreprise/missions`, `/entreprise/chargements`, `/entreprise/suivi`, `/entreprise/incidents`, `/entreprise/historique`, `/entreprise/statistiques` |
+| Chauffeur (mobile-first) | `/chauffeur` |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+L'entreprise simulée se choisit dans la barre latérale de l'espace entreprise ; le chauffeur simulé dans l'onglet « Profil » de l'application chauffeur.
 
-## Learn More
+## Parcours de démonstration conseillé
 
-To learn more about Next.js, take a look at the following resources:
+1. `/chauffeur` (chauffeur Ahmed Ali Hassan) : ouvrir la mission MS-26-1062, puis Démarrer → Chargement terminé → Transport → Arrivée → Confirmer la livraison.
+2. `/operations` : la mission apparaît livrée ; la clôturer depuis le panneau de suivi.
+3. `/missions` : créer une mission, puis affecter un camion et un chauffeur.
+4. `/incidents` : traiter l'incident critique (groupe froid) et le passer à « Résolu ».
+5. Paramètres → « Réinitialiser la démonstration » pour revenir aux données initiales.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+app/            routes (groupes (admin), (company), (driver), (auth))
+components/
+  layout/       shell, sidebar, header (recherche globale, notifications, profil)
+  ui/           boutons, badges, cartes, modales, formulaires, toasts, images avec fallback
+  tables/       tableau générique paginé
+  forms/        formulaires de création / modification
+  details/      fiches détaillées (panneau latéral avec navigation croisée)
+  dashboard/ charts/ maps/ operations/ modules/ driver/ auth/
+lib/
+  data/         jeu de données (seed), géographie, séries analytiques
+  store/        store local (useSyncExternalStore + localStorage) et sélecteurs par périmètre
+  constants/ utils/
+types/          modèles TypeScript
+public/images/  photos libres de droits + credits.json
+```
 
-## Deploy on Vercel
+Stack : Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4, Lucide React, Recharts, React Leaflet (tuiles OpenStreetMap).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Images
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Photographies issues de Wikimedia Commons (CC0, domaine public, CC BY, CC BY-SA). Auteurs et licences : page `/credits` et fichier `public/images/credits.json`. Les avatars des chauffeurs sont volontairement des monogrammes pour ne pas associer de vrais visages à des identités fictives.
+
+La carte affiche des **itinéraires et positions illustratifs** ; aucune donnée GPS réelle n'est utilisée.
