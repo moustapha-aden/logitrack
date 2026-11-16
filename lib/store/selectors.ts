@@ -110,8 +110,10 @@ export function usePermissions(): Permissions {
     if (!scope) return { user: null, role: null, roleLabel: "Administrateur plateforme", active: true, actor: data.settings.userName, can: () => true };
     const company = data.companies.find((c) => c.id === scope);
     const user = data.users.find((u) => u.id === data.prefs.userId && u.companyId === scope) ?? data.users.find((u) => u.companyId === scope && u.role === "admin") ?? null;
-    const role: CompanyRole = user?.role ?? "lecture";
-    const active = user?.active ?? false;
+    // aucune fiche utilisateur (entreprise ancienne ou importée) : administrateur implicite
+    const noUsers = !data.users.some((u) => u.companyId === scope);
+    const role: CompanyRole = user?.role ?? (noUsers ? "admin" : "lecture");
+    const active = user ? user.active : noUsers;
     return {
       user,
       role,

@@ -59,7 +59,7 @@ export function ActionMenu({ items, label = "Actions", trigger }: { items: (Menu
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={!!pos}
-        className="inline-flex size-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-ink"
+        className="inline-flex size-10 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-ink sm:size-8"
       >
         {trigger ?? <MoreHorizontal className="size-4" />}
       </button>

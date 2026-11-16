@@ -39,7 +39,7 @@ export function MissionsView({ mode = "all" }: { mode?: "all" | "history" }) {
   const base = mode === "history" ? missions.filter((m) => m.step >= 6) : missions;
   const filtered = base
     .filter((m) => (company === "all" || m.companyId === company) && (!from || m.plannedDeparture.slice(0, 10) >= from) && (!to || m.plannedDeparture.slice(0, 10) <= to))
-    .filter((m) => includesText([m.ref, placeName(m.origin), placeName(m.destination), m.description, lookups.company(m.clientId)?.name, lookups.truck(m.truckId)?.plate, driverName(lookups.driver(m.driverId))], q))
+    .filter((m) => includesText([m.ref, placeName(m.origin), placeName(m.destination), m.description, lookups.company(m.clientId)?.name, lookups.truck(m.truckId)?.plate ?? m.carrierAssignment?.plate, m.carrierAssignment?.driverName ?? driverName(lookups.driver(m.driverId))], q))
     .sort((a, b) => (mode === "history" ? b.plannedDeparture.localeCompare(a.plannedDeparture) : a.step === b.step ? a.plannedDeparture.localeCompare(b.plannedDeparture) : (a.step >= 6 ? 1 : 0) - (b.step >= 6 ? 1 : 0) || b.plannedDeparture.localeCompare(a.plannedDeparture)));
   const rows = tab === "all" ? filtered : filtered.filter((m) => missionStatus(m) === tab);
   const owners = all.companies.filter((c) => c.type !== "client");
@@ -49,7 +49,7 @@ export function MissionsView({ mode = "all" }: { mode?: "all" | "history" }) {
 
   const exportCsv = () => {
     const header = ["Référence", "Entreprise", "Client", "Départ", "Destination", "Date départ", "Camion", "Chauffeur", "Statut", "Tarif DJF"];
-    const lines = rows.map((m) => [m.ref, lookups.company(m.companyId)?.name, lookups.company(m.clientId)?.name, placeName(m.origin), placeName(m.destination), formatDate(m.plannedDeparture), lookups.truck(m.truckId)?.plate ?? "", driverName(lookups.driver(m.driverId)), MISSION_STATUS[missionStatus(m)].label, perms.can("price.view") ? m.priceDjf : ""]);
+    const lines = rows.map((m) => [m.ref, lookups.company(m.companyId)?.name, lookups.company(m.clientId)?.name, placeName(m.origin), placeName(m.destination), formatDate(m.plannedDeparture), lookups.truck(m.truckId)?.plate ?? m.carrierAssignment?.plate ?? "", m.carrierAssignment ? `${m.carrierAssignment.driverName} (${lookups.carrier(m.carrierId)?.name ?? "transporteur"})` : driverName(lookups.driver(m.driverId)), MISSION_STATUS[missionStatus(m)].label, perms.can("price.view") ? m.priceDjf : ""]);
     const csv = [header, ...lines].map((l) => l.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
     const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -100,6 +100,16 @@ export function MissionsView({ mode = "all" }: { mode?: "all" | "history" }) {
       header: "Camion / Chauffeur",
       hideBelow: "md",
       cell: (m) => {
+        if (m.carrierAssignment) {
+          return (
+            <span className="min-w-0">
+              <span className="block truncate text-sm">{m.carrierAssignment.driverName}</span>
+              <span className="block truncate text-xs text-slate-500">
+                <span className="font-mono">{m.carrierAssignment.plate}</span> · {lookups.carrier(m.carrierId)?.name ?? "transporteur"}
+              </span>
+            </span>
+          );
+        }
         const d = lookups.driver(m.driverId);
         const t = lookups.truck(m.truckId);
         if (!t && !d) return <Badge tone="red">À affecter</Badge>;

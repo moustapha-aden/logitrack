@@ -50,7 +50,7 @@ export function OperationsView() {
   });
   const list = byFilter
     .filter((m) => stepFilter === null || m.step === stepFilter)
-    .filter((m) => includesText([m.ref, placeName(m.origin), placeName(m.destination), lookups.truck(m.truckId)?.plate, driverName(lookups.driver(m.driverId))], q))
+    .filter((m) => includesText([m.ref, placeName(m.origin), placeName(m.destination), lookups.truck(m.truckId)?.plate ?? m.carrierAssignment?.plate, m.carrierAssignment?.driverName ?? driverName(lookups.driver(m.driverId))], q))
     .sort((a, b) => Number(b.delayed) - Number(a.delayed) || b.step - a.step);
   const selected = lookups.mission(selectedId) ?? list[0];
   const perms = usePermissions();
@@ -76,8 +76,22 @@ export function OperationsView() {
 
   const columns: Column<Mission>[] = [
     { key: "ref", header: "Mission", cell: (m) => <span className="font-mono text-xs font-semibold whitespace-nowrap">{m.ref}</span> },
-    { key: "truck", header: "Camion", cell: (m) => <span className="font-mono text-sm whitespace-nowrap">{lookups.truck(m.truckId)?.plate ?? "—"}</span> },
-    { key: "driver", header: "Chauffeur", hideBelow: "md", cell: (m) => <span className="flex items-center gap-2"><DriverAvatar driver={lookups.driver(m.driverId)} size="xs" /> <span className="truncate">{driverName(lookups.driver(m.driverId))}</span></span> },
+    { key: "truck", header: "Camion", cell: (m) => <span className="font-mono text-sm whitespace-nowrap">{lookups.truck(m.truckId)?.plate ?? m.carrierAssignment?.plate ?? "—"}</span> },
+    {
+      key: "driver",
+      header: "Chauffeur",
+      hideBelow: "md",
+      cell: (m) =>
+        m.carrierAssignment ? (
+          <span className="truncate text-sm">
+            {m.carrierAssignment.driverName} <span className="text-xs text-slate-500">· {lookups.carrier(m.carrierId)?.name ?? "transporteur"}</span>
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <DriverAvatar driver={lookups.driver(m.driverId)} size="xs" /> <span className="truncate">{driverName(lookups.driver(m.driverId))}</span>
+          </span>
+        ),
+    },
     { key: "from", header: "Départ", hideBelow: "lg", cell: (m) => <span className="whitespace-nowrap">{placeName(m.origin)}</span> },
     { key: "to", header: "Destination", cell: (m) => placeName(m.destination) },
     { key: "update", header: "Dernière mise à jour", hideBelow: "md", cell: (m) => <span className="text-xs whitespace-nowrap text-slate-500 tabular-nums">{formatDateTime(lastUpdate(m))}</span> },
@@ -169,10 +183,13 @@ export function OperationsView() {
                   {placeName(selected.origin)} <ArrowRight className="size-4 text-slate-400" /> {placeName(selected.destination)}
                 </p>
                 <div className="mt-3 flex items-center gap-3">
-                  <DriverAvatar driver={lookups.driver(selected.driverId)} />
+                  {!selected.carrierAssignment && <DriverAvatar driver={lookups.driver(selected.driverId)} />}
                   <div className="min-w-0 text-sm">
-                    <p className="truncate font-medium">{driverName(lookups.driver(selected.driverId))}</p>
-                    <p className="font-mono text-xs text-slate-500">{lookups.truck(selected.truckId)?.plate ?? "Camion à affecter"}</p>
+                    <p className="truncate font-medium">{selected.carrierAssignment?.driverName ?? driverName(lookups.driver(selected.driverId))}</p>
+                    <p className="truncate font-mono text-xs text-slate-500">
+                      {lookups.truck(selected.truckId)?.plate ?? selected.carrierAssignment?.plate ?? "Camion à affecter"}
+                      {selected.carrierAssignment && ` · ${lookups.carrier(selected.carrierId)?.name ?? "transporteur"}`}
+                    </p>
                   </div>
                   <Button variant="ghost" size="sm" icon={Eye} className="ml-auto" onClick={() => open({ kind: "mission", id: selected.id })}>
                     Fiche

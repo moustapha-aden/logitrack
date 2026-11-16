@@ -45,7 +45,7 @@ export function useInvoiceActions(by: string) {
         label: "Lever la contestation",
         icon: CircleAlert,
         onClick: () => {
-          actions.setInvoiceStatus(inv.id, paidAmount(inv) > 0 ? "partielle" : "envoyee");
+          actions.setInvoiceStatus(inv.id, paidAmount(inv) >= inv.amount ? "payee" : paidAmount(inv) > 0 ? "partielle" : "envoyee");
           toast("Contestation levée", { message: inv.ref });
         },
       },
@@ -59,8 +59,8 @@ export function useInvoiceActions(by: string) {
       },
       inv.flow === "debours" && inv.rebilledOn && { label: "Retirer la refacturation", icon: Unlink, onClick: () => actions.setDeboursRebilled(inv.id, null) },
       { label: inv.attachment ? "Remplacer le justificatif" : "Joindre le justificatif", icon: Paperclip, onClick: () => pick(inv.id) },
-      onEdit && st !== "payee" && st !== "annulee" && { label: "Modifier", icon: Pencil, onClick: onEdit },
-      st !== "annulee" && st !== "brouillon" && inv.payments.length === 0 && { label: "Annuler la facture", icon: Ban, danger: true, onClick: () => setReason({ invoice: inv, mode: "annulee" }) },
+      onEdit && st !== "annulee" && (st !== "payee" || inv.flow === "debours") && { label: "Modifier", icon: Pencil, onClick: onEdit },
+      st !== "annulee" && st !== "brouillon" && (inv.payments.length === 0 || inv.flow === "debours") && { label: inv.flow === "debours" ? "Annuler le débours" : "Annuler la facture", icon: Ban, danger: true, onClick: () => setReason({ invoice: inv, mode: "annulee" }) },
       st === "brouillon" && { label: "Supprimer le brouillon", icon: Trash2, danger: true, onClick: () => actions.deleteInvoice(inv.id) },
     ].map((item) => item || false);
   };
@@ -129,7 +129,7 @@ export function MissionInvoices({ mission: m, invoices, by, canEdit = true }: { 
                   <p className="mb-1.5 text-[11px] font-medium tracking-wide text-slate-400 uppercase">{INVOICE_FLOWS[flow].label}s</p>
                   <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
                     {rows.map((inv) => (
-                      <li key={inv.id} className="flex items-start gap-3 px-3 py-2.5">
+                      <li key={inv.id} className="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-start sm:gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="font-mono text-xs font-semibold text-slate-600">{inv.ref}</span>
@@ -153,7 +153,7 @@ export function MissionInvoices({ mission: m, invoices, by, canEdit = true }: { 
                             </ul>
                           )}
                         </div>
-                        <div className="shrink-0 text-right">
+                        <div className="flex items-center justify-between gap-2 sm:block sm:shrink-0 sm:text-right">
                           <p className="text-sm font-semibold tabular-nums">{formatMoney(inv.amount, inv.currency)}</p>
                           {inv.flow !== "debours" && isOpen(inv) && paidAmount(inv) > 0 && <p className="text-[11px] text-slate-500 tabular-nums">reste {formatMoney(remaining(inv), inv.currency)}</p>}
                           {canEdit && (

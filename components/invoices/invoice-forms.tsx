@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { demoNowIso } from "@/lib/utils/clock";
 
 const DAY = 24 * 3600 * 1000;
 const dateOnly = (iso: string) => toLocalInput(iso).slice(0, 10);
@@ -37,7 +38,7 @@ function InvoiceForm({ mission, flow: initialFlow, invoice, by, onClose }: { mis
   const valid = label.trim().length > 1 && value > 0 && !!issued && !!due && (flow !== "transporteur" || !!carrierId) && (flow !== "debours" || supplier.trim().length > 1);
 
   const submit = () => {
-    const draft = invoice ?? { ...actions.newInvoiceDraft(data, flow), payments: [], createdAt: new Date().toISOString(), rebilledOn: null };
+    const draft = invoice ?? { ...actions.newInvoiceDraft(data, flow), payments: [], createdAt: demoNowIso(), rebilledOn: null };
     const counterparty =
       flow === "client"
         ? { counterpartyId: mission.clientId, counterpartyName: client?.name ?? "Client" }
@@ -58,7 +59,7 @@ function InvoiceForm({ mission, flow: initialFlow, invoice, by, onClose }: { mis
       // un débours est un frais déjà réglé par l'entreprise
       status: flow === "debours" ? "payee" : invoice && invoice.status !== "brouillon" && invoice.status !== "emise" ? invoice.status : status,
       payments: flow === "debours" && !invoice ? [{ id: uid("pay"), at: fromDate(issued), amount: value, mode: "virement" as const, by }] : draft.payments,
-      updatedAt: new Date().toISOString(),
+      updatedAt: demoNowIso(),
     };
     actions.saveInvoice(inv);
     toast(invoice ? "Facture modifiée" : flow === "debours" ? "Débours enregistré" : "Facture enregistrée", { message: `${inv.ref} — ${formatMoney(inv.amount, inv.currency)}` });
@@ -83,7 +84,7 @@ function InvoiceForm({ mission, flow: initialFlow, invoice, by, onClose }: { mis
       }
     >
       {!invoice && (
-        <div className="mb-4 grid grid-cols-3 gap-2">
+        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {(Object.keys(INVOICE_FLOWS) as InvoiceFlow[]).map((f) => (
             <button
               key={f}

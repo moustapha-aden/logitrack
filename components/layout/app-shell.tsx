@@ -102,12 +102,12 @@ function CompanySwitcher() {
 }
 
 /** Compte désactivé : l'accès est retiré immédiatement, même pour une session ouverte. */
-function AccessRevoked({ name }: { name?: string }) {
+function AccessRevoked({ title, message }: { title: string; message: string }) {
   return (
     <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-card">
       <ShieldOff className="mx-auto size-10 text-red-400" />
-      <h1 className="mt-4 text-lg font-semibold">Accès retiré</h1>
-      <p className="mt-1 text-sm text-slate-500">Le compte {name ? `de ${name} ` : ""}a été désactivé par l&apos;administrateur de l&apos;entreprise. Changez d&apos;utilisateur depuis le menu du profil (simulation).</p>
+      <h1 className="mt-4 text-lg font-semibold">{title}</h1>
+      <p className="mt-1 text-sm text-slate-500">{message}</p>
     </div>
   );
 }
@@ -163,6 +163,7 @@ function ShellInner({ variant, children }: { variant: Variant; children: ReactNo
   const company = data.companies.find((c) => c.id === data.prefs.companyId);
   const close = () => setMobileOpen(false);
   const perms = usePermissions();
+  const companyInactive = variant === "company" && !!company && company.status !== "actif";
   // auteur et rôle des actions (activité, historique, journal d'audit) selon l'utilisateur courant
   useLayoutEffect(() => {
     setActor(perms.actor);
@@ -177,9 +178,9 @@ function ShellInner({ variant, children }: { variant: Variant; children: ReactNo
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 animate-fade-in bg-navy-950/50" onClick={close} />
-          <div className="absolute inset-y-0 left-0 w-[280px] animate-slide-up shadow-pop">
+          <div className="absolute inset-y-0 left-0 w-[min(280px,calc(100vw-3rem))] animate-slide-up shadow-pop">
             <Sidebar variant={variant} groups={groups} onNavigate={close} />
-            <button onClick={close} className="absolute top-4 -right-12 rounded-full bg-white p-2 text-slate-600 shadow" aria-label="Fermer le menu">
+            <button onClick={close} className="absolute top-3 right-3 z-10 rounded-full bg-white p-2 text-slate-600 shadow" aria-label="Fermer le menu">
               <X className="size-4" />
             </button>
           </div>
@@ -193,8 +194,17 @@ function ShellInner({ variant, children }: { variant: Variant; children: ReactNo
           userColor={variant === "admin" ? "#101E35" : (company?.color ?? "#0F9F83")}
           notificationsHref={variant === "admin" ? "/notifications" : "/entreprise/notifications"}
           variant={variant}
+          locked={!perms.active || companyInactive}
         />
-        <main className="mx-auto w-full max-w-[1440px] animate-fade-in px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{perms.active ? children : <AccessRevoked name={perms.user?.name} />}</main>
+        <main className="mx-auto w-full max-w-[1440px] animate-fade-in px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          {companyInactive ? (
+            <AccessRevoked title="Entreprise désactivée" message={`${company?.name ?? "Cette entreprise"} a été désactivée par l'administration de la plateforme : son espace est en lecture fermée. Choisissez une autre entreprise dans le menu de gauche.`} />
+          ) : perms.active ? (
+            children
+          ) : (
+            <AccessRevoked title="Accès retiré" message={`Le compte ${perms.user ? `de ${perms.user.name} ` : ""}a été désactivé par l'administrateur de l'entreprise. Changez d'utilisateur depuis le menu du profil (simulation).`} />
+          )}
+        </main>
       </div>
     </div>
   );

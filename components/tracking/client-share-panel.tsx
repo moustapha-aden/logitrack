@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useHydrated } from "@/lib/utils/use-hydrated";
 import { Copy, ExternalLink, Link2, Link2Off, Mail, RefreshCw } from "lucide-react";
 import { actions } from "@/lib/store";
 import { useData } from "@/lib/store/selectors";
@@ -24,6 +25,9 @@ export function ClientSharePanel({ mission: m, by, readOnly = false }: { mission
   const [email, setEmail] = useState(client?.email ?? "");
   const [note, setNote] = useState(share?.publicNote ?? "");
   const [noteFor, setNoteFor] = useState(share?.publicNote);
+  const hydrated = useHydrated();
+  const [notifyEmail, setNotifyEmail] = useState(share?.notifyEmail ?? "");
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(notifyEmail.trim());
   // resynchronise le brouillon si la note change ailleurs (autre onglet)
   if (share?.publicNote !== noteFor) {
     setNoteFor(share?.publicNote);
@@ -68,7 +72,7 @@ export function ClientSharePanel({ mission: m, by, readOnly = false }: { mission
 
   const state = shareState(share);
   const path = trackingPath(share.token);
-  const url = typeof window !== "undefined" ? `${window.location.origin}${path}` : path;
+  const url = hydrated ? `${window.location.origin}${path}` : path;
   const sharedDocs = all.documents.filter((d) => d.missionId === m.id && d.sharedWith.includes("client"));
   const toggleStep = (step: OperationStep) => {
     const steps = share.notifySteps.includes(step) ? share.notifySteps.filter((s) => s !== step) : [...share.notifySteps, step].sort();
@@ -136,7 +140,21 @@ export function ClientSharePanel({ mission: m, by, readOnly = false }: { mission
         <p className="flex items-center gap-2 text-sm font-medium">
           <Mail className="size-4 text-slate-400" /> E-mails automatiques
         </p>
-        <Input type="email" value={share.notifyEmail} onChange={(e) => actions.updateClientShare(m.id, { notifyEmail: e.target.value })} className="mt-2" aria-label="E-mail du client" />
+        <Input
+          type="email"
+          value={notifyEmail}
+          invalid={!emailValid}
+          onChange={(e) => setNotifyEmail(e.target.value)}
+          onBlur={() => {
+            if (emailValid && notifyEmail.trim() !== share.notifyEmail) {
+              actions.updateClientShare(m.id, { notifyEmail: notifyEmail.trim() });
+              toast("E-mail du client enregistré", { message: notifyEmail.trim() });
+            }
+          }}
+          className="mt-2"
+          aria-label="E-mail du client"
+        />
+        {!emailValid && <p className="mt-1 text-xs text-red-500">Adresse e-mail invalide : les notifications ne partiront pas.</p>}
         <div className="mt-2 flex flex-wrap gap-2">
           {NOTIFY_STEPS.map((n) => {
             const on = share.notifySteps.includes(n.step);

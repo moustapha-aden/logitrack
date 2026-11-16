@@ -53,8 +53,8 @@ export function MissionThread({ missionId, messages, author, role, disabledReaso
             placeholder="Écrire un message… (Ctrl + Entrée pour envoyer)"
             aria-label="Message"
           />
-          <Button icon={Send} onClick={send} disabled={!text.trim()} aria-label="Envoyer">
-            Envoyer
+          <Button icon={Send} onClick={send} disabled={!text.trim()} aria-label="Envoyer" className="max-sm:size-10 max-sm:px-0">
+            <span className="hidden sm:inline">Envoyer</span>
           </Button>
         </div>
       )}

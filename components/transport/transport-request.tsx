@@ -116,7 +116,8 @@ export function TransportRequestPanel({ mission, by, onNew, canManage = true }: 
   const r = latestRequest(all.requests, mission.id);
   if (!r) return null;
   const status = requestStatus(r);
-  const canAct = status === "ouverte" && canManage;
+  // une acceptation reçue reste confirmable même après la date limite
+  const canAct = r.status === "ouverte" && canManage && mission.step < 2;
 
   return (
     <DetailSection title={`Demande de transport ${r.ref}`} action={<StatusBadge map={REQUEST_STATUS} value={status} />}>
@@ -169,7 +170,7 @@ export function TransportRequestPanel({ mission, by, onNew, canManage = true }: 
           );
         })}
       </ul>
-      {canManage && (canAct || status === "expiree" || status === "annulee") && mission.step < 6 && (
+      {canManage && (canAct || status === "expiree" || status === "annulee") && mission.step < 2 && (
         <div className="mt-3 flex flex-wrap justify-end gap-2">
           {canAct && (
             <Button

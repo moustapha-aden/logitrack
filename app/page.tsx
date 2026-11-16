@@ -76,7 +76,7 @@ export default function LandingPage() {
       {/* Espaces */}
       <section id="espaces" className="mx-auto max-w-7xl px-5 py-24 sm:px-8">
         <div className="max-w-2xl">
-          <p className="text-sm font-semibold text-brand-600">Trois espaces, une seule plateforme</p>
+          <p className="text-sm font-semibold text-brand-600">Quatre espaces, une seule plateforme</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-navy-900 sm:text-4xl">Chaque acteur dispose d&apos;un espace adapté à son métier.</h2>
         </div>
         <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">

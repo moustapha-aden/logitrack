@@ -2,6 +2,7 @@
 
 import { ArrowRight, Check, Clock, FileText, Info, Link2Off, Phone, ShieldCheck, Truck, User } from "lucide-react";
 import { useAppData } from "@/lib/store";
+import { useHydrated } from "@/lib/utils/use-hydrated";
 import { DOC_TYPES, GOODS_TYPES } from "@/lib/constants";
 import { placeName } from "@/lib/data/geo";
 import { cn, driverName, formatDate, formatDateTime } from "@/lib/utils";
@@ -14,7 +15,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-canvas">
       <main className="mx-auto max-w-2xl px-4 py-6 sm:py-10">{children}</main>
-      <footer className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 pb-8 text-[11px] text-slate-400">
+      <footer className="mx-auto flex max-w-2xl flex-col items-center justify-between gap-3 px-4 pb-[max(2rem,env(safe-area-inset-bottom))] text-center text-[11px] text-slate-400 sm:flex-row sm:text-left">
         <span>Lien personnel — merci de ne pas le transférer.</span>
         <span className="flex items-center gap-1.5">
           Suivi assuré par <Logo />
@@ -39,9 +40,11 @@ function Unavailable({ title, message }: { title: string; message: string }) {
 /** Page publique ouverte par le client depuis le lien reçu. Aucune donnée interne n'y figure. */
 export function TrackingView({ token }: { token: string }) {
   const data = useAppData();
+  const hydrated = useHydrated();
   const m = data.missions.find((x) => x.clientShare?.token === token);
   const share = m?.clientShare;
 
+  if ((!m || !share) && !hydrated) return <Shell><div className="h-64 animate-pulse rounded-2xl bg-slate-100" aria-label="Chargement du suivi" /></Shell>;
   if (!m || !share) return <Unavailable title="Lien introuvable" message="Ce lien de suivi n'existe pas ou a été remplacé. Contactez votre transitaire pour obtenir un nouveau lien." />;
   const state = shareState(share);
   if (state === "desactive") return <Unavailable title="Lien désactivé" message="Votre transitaire a désactivé ce lien de suivi. Contactez-le pour en obtenir un nouveau." />;

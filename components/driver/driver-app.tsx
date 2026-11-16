@@ -807,7 +807,7 @@ export function DriverApp() {
       </aside>
 
       {/* Téléphone */}
-      <div className="relative mx-auto min-h-screen w-full max-w-md bg-canvas lg:h-[860px] lg:min-h-0 lg:overflow-hidden lg:rounded-[44px] lg:border-[10px] lg:border-navy-900 lg:shadow-2xl">
+      <div className="relative mx-auto min-h-screen w-full max-w-md bg-canvas lg:h-[min(860px,calc(100dvh-4rem))] lg:min-h-0 lg:overflow-hidden lg:rounded-[44px] lg:border-[10px] lg:border-navy-900 lg:shadow-2xl">
         <div className="scroll-thin h-full overflow-y-auto">
           <div className="px-4 pt-4 pb-28">
             {screen.name === "home" && <HomeScreen go={go} onDelay={setDelayFor} onIncident={setIncidentFor} />}

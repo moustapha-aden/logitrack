@@ -18,6 +18,19 @@ export interface Column<T> {
 
 const hideClass = { sm: "hidden sm:table-cell", md: "hidden md:table-cell", lg: "hidden lg:table-cell", xl: "hidden xl:table-cell" };
 
+/** Numéros de page affichés : première, dernière et voisines de la page courante (au plus 7), « … » entre. */
+function pageWindow(current: number, pages: number): (number | null)[] {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+  const set = new Set([1, pages, current - 1, current, current + 1].filter((p) => p >= 1 && p <= pages));
+  const sorted = [...set].sort((a, b) => a - b);
+  const out: (number | null)[] = [];
+  sorted.forEach((p, i) => {
+    if (i > 0 && p - sorted[i - 1] > 1) out.push(null);
+    out.push(p);
+  });
+  return out;
+}
+
 export function DataTable<T extends { id: string }>({
   columns,
   rows,
@@ -45,7 +58,7 @@ export function DataTable<T extends { id: string }>({
   return (
     <div>
       <div className="scroll-thin overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full min-w-full text-sm sm:min-w-[640px]">
           <thead>
             <tr className="border-y border-slate-100 bg-slate-50/70 text-left text-[11px] font-semibold tracking-wider text-slate-500 uppercase">
               {columns.map((c) => (
@@ -78,20 +91,29 @@ export function DataTable<T extends { id: string }>({
         </span>
         {pages > 1 && (
           <div className="flex items-center gap-1">
-            <button onClick={() => setPage(current - 1)} disabled={current === 1} className="inline-flex size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label="Page précédente">
+            <button onClick={() => setPage(current - 1)} disabled={current === 1} className="inline-flex size-10 sm:size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label="Page précédente">
               <ChevronLeft className="size-4" />
             </button>
-            {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPage(p)}
-                className={cn("inline-flex size-8 items-center justify-center rounded-lg text-xs font-medium tabular-nums", p === current ? "bg-navy-900 text-white" : "text-slate-600 hover:bg-slate-100")}
-                aria-current={p === current ? "page" : undefined}
-              >
-                {p}
-              </button>
-            ))}
-            <button onClick={() => setPage(current + 1)} disabled={current === pages} className="inline-flex size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label="Page suivante">
+            <span className="px-2 tabular-nums sm:hidden">
+              {current} / {pages}
+            </span>
+            {pageWindow(current, pages).map((p, i) =>
+              p === null ? (
+                <span key={`gap-${i}`} className="hidden px-1 text-slate-400 sm:inline">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={cn("hidden size-8 items-center justify-center rounded-lg text-xs font-medium tabular-nums sm:inline-flex", p === current ? "bg-navy-900 text-white" : "text-slate-600 hover:bg-slate-100")}
+                  aria-current={p === current ? "page" : undefined}
+                >
+                  {p}
+                </button>
+              ),
+            )}
+            <button onClick={() => setPage(current + 1)} disabled={current === pages} className="inline-flex size-10 sm:size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label="Page suivante">
               <ChevronRight className="size-4" />
             </button>
           </div>

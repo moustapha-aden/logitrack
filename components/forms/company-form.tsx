@@ -11,6 +11,7 @@ import { CompanyLogo } from "@/components/ui/media";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { emailRule, required, useForm } from "./use-form";
+import { demoNowIso } from "@/lib/utils/clock";
 
 const COLORS = ["#2563EB", "#0F9F83", "#F59E0B", "#7C3AED", "#101E35", "#DC2626", "#0E7490", "#B45309"];
 
@@ -25,7 +26,7 @@ function Inner({ onClose, company }: { onClose: () => void; company?: Company })
 
   const save = submit((v) => {
     const id = company?.id ?? actions.newCompanyId();
-    actions.saveCompany({ ...v, id, initials: initials(v.name), createdAt: company?.createdAt ?? new Date().toISOString() });
+    actions.saveCompany({ ...v, id, initials: initials(v.name), createdAt: company?.createdAt ?? demoNowIso() });
     toast(company ? "Entreprise mise à jour" : "Entreprise ajoutée", { message: v.name });
     onClose();
   });

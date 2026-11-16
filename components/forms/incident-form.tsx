@@ -12,6 +12,7 @@ import { Field, FormGrid, Input, Select, Textarea } from "@/components/ui/form";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { required, useForm } from "./use-form";
+import { demoNowIso } from "@/lib/utils/clock";
 
 interface Values {
   missionId: string;
@@ -35,7 +36,7 @@ function Inner({ onClose, missionId, type, reportedBy }: { onClose: () => void; 
       description: "",
       location: "",
       delayMinutes: type === "retard" ? 60 : 0,
-      date: toLocalInput(new Date().toISOString()),
+      date: toLocalInput(demoNowIso()),
     },
     (v) => ({ missionId: required(v.missionId), description: required(v.description.trim(), "Décrivez la situation"), location: required(v.location.trim()) }),
   );

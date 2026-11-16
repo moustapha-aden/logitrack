@@ -19,7 +19,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { actions } from "@/lib/store";
-import { useData } from "@/lib/store/selectors";
+import { useData, usePermissions } from "@/lib/store/selectors";
 import { Can } from "@/components/auth/can";
 import { ACTIVE_STATUS, CARRIER_STATUS, COMPANY_TYPES, DRIVER_AVAILABILITY, TRUCK_STATUS, TRUCK_TYPES } from "@/lib/constants";
 import { driverName, formatDate, formatDjf, formatNumber, isActiveMission } from "@/lib/utils";
@@ -41,6 +41,7 @@ import { DetailSection, EntityLink, MiniStat, MissionRow, NotFound } from "./par
 // ── Entreprise ───────────────────────────────────────────────
 export function CompanyDetail({ id }: { id: string }) {
   const { all, lookups, scope } = useData();
+  const { can } = usePermissions();
   const { open } = useDetail();
   const { toast } = useToast();
   const [edit, setEdit] = useState(false);
@@ -90,7 +91,7 @@ export function CompanyDetail({ id }: { id: string }) {
           <MiniStat label="Camions" value={trucks.length} />
           <MiniStat label="Chauffeurs" value={drivers.length} />
           <MiniStat label="Missions" value={missions.length} />
-          <MiniStat label="Volume d'affaires" value={<span className="text-sm">{formatDjf(revenue)}</span>} />
+          {can("price.view") ? <MiniStat label="Volume d'affaires" value={<span className="text-sm">{formatDjf(revenue)}</span>} /> : <MiniStat label="Terminées" value={missions.filter((m) => m.step >= 6).length} />}
         </div>
 
         <DetailSection title="Coordonnées">

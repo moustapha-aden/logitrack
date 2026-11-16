@@ -96,7 +96,7 @@ export function LoginView() {
           <h2 className="mt-8 text-2xl font-semibold tracking-tight lg:mt-0">Connexion à votre espace</h2>
           <p className="mt-1 text-sm text-slate-500">Prototype de démonstration — aucun mot de passe réel n&apos;est requis.</p>
 
-          <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Profil">
+          <div className="mt-6 grid grid-cols-2 gap-2" role="radiogroup" aria-label="Profil">
             {ROLES.map((r) => (
               <button
                 key={r.id}
@@ -106,7 +106,7 @@ export function LoginView() {
                 className={cn("rounded-xl border p-3 text-left transition", role === r.id ? "border-brand-600 bg-brand-50 ring-2 ring-brand-600/15" : "border-slate-200 hover:border-slate-300")}
               >
                 <r.icon className={cn("size-5", role === r.id ? "text-brand-600" : "text-slate-400")} />
-                <p className="mt-2 text-sm font-semibold">{r.label}</p>
+                <p className="mt-2 text-sm font-semibold [overflow-wrap:anywhere]">{r.label}</p>
                 <p className="mt-0.5 hidden text-[11px] leading-tight text-slate-500 sm:block">{r.desc}</p>
               </button>
             ))}
@@ -174,7 +174,7 @@ export function LoginView() {
                 </Select>
               </Field>
             )}
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
               <label className="flex items-center gap-2 text-slate-600">
                 <input type="checkbox" defaultChecked className="size-4 rounded accent-brand-600" /> Se souvenir de moi
               </label>
@@ -182,8 +182,15 @@ export function LoginView() {
                 Mot de passe oublié ?
               </button>
             </div>
-            <Button type="submit" size="lg" iconRight={ArrowRight} className="w-full" disabled={loading}>
-              {loading ? "Connexion…" : `Accéder à l'espace ${current.label.toLowerCase()}`}
+            <Button type="submit" size="lg" iconRight={ArrowRight} className="h-auto min-h-12 w-full py-2 whitespace-normal" disabled={loading}>
+              {loading ? (
+                "Connexion…"
+              ) : (
+                <>
+                  <span className="sm:hidden">Se connecter</span>
+                  <span className="hidden sm:inline">Accéder à l&apos;espace {current.label.toLowerCase()}</span>
+                </>
+              )}
             </Button>
           </form>
           <p className="mt-8 text-center text-xs text-slate-400">

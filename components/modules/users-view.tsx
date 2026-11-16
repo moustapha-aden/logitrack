@@ -14,6 +14,7 @@ import { Field, Input, Select } from "@/components/ui/form";
 import { ConfirmDialog, Modal } from "@/components/ui/modal";
 import { AccessDenied, PageHeader } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
+import { demoNowIso } from "@/lib/utils/clock";
 
 const ROLE_KEYS = Object.keys(ROLES) as CompanyRole[];
 
@@ -39,7 +40,7 @@ function InviteModal({ companyId, domain, onClose }: { companyId: string; domain
             icon={UserPlus}
             disabled={!valid}
             onClick={() => {
-              const user: CompanyUser = { id: actions.newUserId(), companyId, name: name.trim(), email: email.trim(), role, active: true, twoFactor: false, createdAt: new Date().toISOString() };
+              const user: CompanyUser = { id: actions.newUserId(), companyId, name: name.trim(), email: email.trim(), role, active: true, twoFactor: false, createdAt: demoNowIso() };
               actions.saveUser(user);
               toast("Utilisateur invité", { message: `${user.name} — ${ROLES[role].label}` });
               onClose();
@@ -134,7 +135,7 @@ export function UsersView() {
                       toast("Rôle modifié", { message: `${u.name} — ${ROLES[e.target.value as CompanyRole].label}` });
                     }}
                     aria-label={`Rôle de ${u.name}`}
-                    className="h-9 w-56 text-sm"
+                    className="h-9 w-full text-sm sm:w-56"
                     title={locked ? "Dernier administrateur actif : rôle verrouillé" : undefined}
                   >
                     {ROLE_KEYS.map((r) => (
@@ -182,7 +183,7 @@ export function UsersView() {
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                <th className="py-2 pr-3 font-medium">Action</th>
+                <th className="sticky left-0 bg-white py-2 pr-3 font-medium">Action</th>
                 {ROLE_KEYS.map((r) => (
                   <th key={r} className="px-2 py-2 text-center font-medium">
                     {ROLES[r].label}
@@ -193,7 +194,7 @@ export function UsersView() {
             <tbody className="divide-y divide-slate-100">
               {MATRIX_ROWS.map((row) => (
                 <tr key={row.perm}>
-                  <td className="py-2 pr-3 text-slate-700">{row.label}</td>
+                  <td className="sticky left-0 bg-white py-2 pr-3 text-slate-700">{row.label}</td>
                   {ROLE_KEYS.map((r) => (
                     <td key={r} className="px-2 py-2 text-center">
                       {roleCan(r, row.perm) ? <Check className="mx-auto size-4 text-success-600" aria-label="Oui" /> : <Minus className="mx-auto size-4 text-slate-300" aria-label="Non" />}

@@ -70,7 +70,7 @@ export function AuditView() {
           },
         ]
       : []),
-    { key: "action", header: "Type", cell: (a) => <Badge tone={TONES[a.action]}>{AUDIT_ACTIONS[a.action]}</Badge> },
+    { key: "action", header: "Type", hideBelow: "sm", cell: (a) => <Badge tone={TONES[a.action]}>{AUDIT_ACTIONS[a.action]}</Badge> },
     {
       key: "text",
       header: "Action",

@@ -5,7 +5,7 @@ import { createSeed, DATA_VERSION } from "@/lib/data/seed";
 import { DOC_STATUS, DOC_TYPES, INVOICE_FLOWS, INVOICE_STATUS, OPERATION_STEPS, PAYMENT_MODES } from "@/lib/constants";
 import { formatMoney } from "@/lib/utils/invoices";
 import { auditActionOf, ROLES } from "@/lib/permissions";
-import { checklistFor, newDocument } from "@/lib/utils/documents";
+import { checklistFor, defaultDueAt, newDocument } from "@/lib/utils/documents";
 import { demoNowIso, demoNowMs } from "@/lib/utils/clock";
 import { placeName } from "@/lib/data/geo";
 import { driverName, formatDateTime, isActiveMission, uid } from "@/lib/utils";
@@ -164,9 +164,9 @@ function withAudit(s: AppData, entry: Omit<AuditEntry, "id" | "at" | "role"> & {
 }
 
 /** Chaque action tracée dans l'activité est aussi inscrite au journal d'audit (conservé plus longtemps). */
-function withActivity(s: AppData, item: Omit<ActivityItem, "id" | "at">): AppData {
+function withActivity(s: AppData, item: Omit<ActivityItem, "id" | "at">, audit?: AuditAction): AppData {
   const next = { ...s, activity: [{ ...item, id: uid("act"), at: nowIso() }, ...s.activity].slice(0, 60) };
-  return withAudit(next, { actor: item.actor, companyId: item.companyId, action: auditActionOf(item.text), text: item.text, link: item.link });
+  return withAudit(next, { actor: item.actor, companyId: item.companyId, action: audit ?? auditActionOf(item.text), text: item.text, link: item.link });
 }
 
 function withNotification(s: AppData, n: Omit<AppNotification, "id" | "at" | "read">): AppData {
@@ -203,15 +203,24 @@ function nextRef(prefix: string, refs: string[], start: number): string {
 
 // ── Actions publiques ────────────────────────────────────────
 export const actions = {
+  /** Recharge les données de démonstration ; le journal d'audit est conservé (non modifiable). */
   reset() {
-    commit(createSeed());
+    const s = load();
+    const fresh = createSeed();
+    commit(withAudit({ ...fresh, audit: [...s.audit] }, { actor: actorOf(s), action: "modification", text: "a réinitialisé les données de démonstration" }));
   },
 
   // Entreprises
   saveCompany(c: Company) {
     update((s) => {
       const isNew = !s.companies.some((x) => x.id === c.id);
-      const next = { ...s, companies: upsert(s.companies, c) };
+      let next: AppData = { ...s, companies: upsert(s.companies, c) };
+      // une entreprise transporteur / transitaire doit pouvoir se connecter : son responsable devient administrateur
+      if (isNew && c.type !== "client" && !s.users.some((u) => u.companyId === c.id)) {
+        const admin: CompanyUser = { id: uid("usr"), companyId: c.id, name: c.manager, email: c.email, role: "admin", active: true, twoFactor: false, createdAt: nowIso() };
+        next = { ...next, users: [...next.users, admin] };
+        next = withAudit(next, { actor: actorOf(s), companyId: c.id, action: "droits", text: `a créé le compte administrateur de ${c.manager} (${c.email})` });
+      }
       return withActivity(next, { actor: actorOf(s), text: `${isNew ? "a ajouté" : "a modifié"} l'entreprise ${c.name}`, tone: "info", link: { kind: "company", id: c.id } });
     });
   },
@@ -228,14 +237,21 @@ export const actions = {
 
   // Transporteurs
   saveCarrier(c: Carrier) {
-    update((s) => ({ ...s, carriers: upsert(s.carriers, c) }));
+    update((s) => {
+      const isNew = !s.carriers.some((x) => x.id === c.id);
+      const next: AppData = { ...s, carriers: upsert(s.carriers, c) };
+      return withActivity(next, { actor: actorOf(s), text: `${isNew ? "a ajouté" : "a modifié"} le transporteur partenaire ${c.name}`, tone: "info", companyId: c.companyId, link: { kind: "carrier", id: c.id } }, "modification");
+    });
   },
+  /** Interdit tant que le transporteur a des missions ou des demandes en cours ; l'historique (missions, factures) est conservé. */
   deleteCarrier(id: string) {
-    update((s) => ({
-      ...s,
-      carriers: s.carriers.filter((c) => c.id !== id),
-      missions: s.missions.map((m) => (m.carrierId === id ? { ...m, carrierId: null, carrierAssignment: null } : m)),
-    }));
+    update((s) => {
+      const c = s.carriers.find((x) => x.id === id);
+      const busy = s.missions.some((m) => m.carrierId === id && m.step < 6) || s.requests.some((r) => r.status === "ouverte" && r.responses.some((x) => x.carrierId === id));
+      if (!c || busy) return s;
+      const next: AppData = { ...s, carriers: s.carriers.filter((x) => x.id !== id) };
+      return withActivity(next, { actor: actorOf(s), text: `a supprimé le transporteur partenaire ${c.name}`, tone: "warning", companyId: c.companyId }, "modification");
+    });
   },
   newCarrierId: () => uid("car"),
 
@@ -249,15 +265,25 @@ export const actions = {
     });
   },
   setTruckStatus(id: string, status: TruckStatus) {
-    update((s) => ({ ...s, trucks: s.trucks.map((t) => (t.id === id ? { ...t, status } : t)) }));
+    update((s) => {
+      const t = s.trucks.find((x) => x.id === id);
+      if (!t) return s;
+      const next: AppData = { ...s, trucks: s.trucks.map((x) => (x.id === id ? { ...x, status } : x)) };
+      return withActivity(next, { actor: actorOf(s), text: `a passé le camion ${t.plate} au statut « ${status} »`, tone: "info", companyId: t.companyId, link: { kind: "truck", id } }, "modification");
+    });
   },
   deleteTruck(id: string) {
-    update((s) => ({
-      ...s,
-      trucks: s.trucks.filter((t) => t.id !== id),
-      drivers: s.drivers.map((d) => (d.truckId === id ? { ...d, truckId: null } : d)),
-      missions: s.missions.map((m) => (m.truckId === id && m.step < 6 ? { ...m, truckId: null } : m)),
-    }));
+    update((s) => {
+      const t = s.trucks.find((x) => x.id === id);
+      if (!t) return s;
+      const next: AppData = {
+        ...s,
+        trucks: s.trucks.filter((x) => x.id !== id),
+        drivers: s.drivers.map((d) => (d.truckId === id ? { ...d, truckId: null } : d)),
+        missions: s.missions.map((m) => (m.truckId === id && m.step < 6 ? { ...m, truckId: null } : m)),
+      };
+      return withActivity(next, { actor: actorOf(s), text: `a supprimé le camion ${t.plate}`, tone: "warning", companyId: t.companyId }, "modification");
+    });
   },
   newTruckId: () => uid("trk"),
 
@@ -272,12 +298,17 @@ export const actions = {
     });
   },
   deleteDriver(id: string) {
-    update((s) => ({
-      ...s,
-      drivers: s.drivers.filter((d) => d.id !== id),
-      trucks: s.trucks.map((t) => (t.driverId === id ? { ...t, driverId: null } : t)),
-      missions: s.missions.map((m) => (m.driverId === id && m.step < 6 ? { ...m, driverId: null } : m)),
-    }));
+    update((s) => {
+      const d = s.drivers.find((x) => x.id === id);
+      if (!d) return s;
+      const next: AppData = {
+        ...s,
+        drivers: s.drivers.filter((x) => x.id !== id),
+        trucks: s.trucks.map((t) => (t.driverId === id ? { ...t, driverId: null } : t)),
+        missions: s.missions.map((m) => (m.driverId === id && m.step < 6 ? { ...m, driverId: null } : m)),
+      };
+      return withActivity(next, { actor: actorOf(s), text: `a supprimé le chauffeur ${driverName(d)}`, tone: "warning", companyId: d.companyId }, "modification");
+    });
   },
   newDriverId: () => uid("drv"),
 
@@ -300,10 +331,17 @@ export const actions = {
         companyId: m.companyId,
         link: { kind: "mission", id: m.id },
       });
-      if (isNew && !s.documents.some((d) => d.missionId === m.id)) {
+      {
         const at = nowIso();
-        const docs = checklistFor(m, loadData?.hazardous ?? false).map((type) => newDocument(uid("doc"), m.id, type, m, at));
-        next = { ...next, documents: [...next.documents, ...docs] };
+        const hazardous = loadData?.hazardous ?? s.loads.find((l) => l.missionId === m.id)?.hazardous ?? false;
+        const current = next.documents.filter((d) => d.missionId === m.id);
+        // pièces manquantes ajoutées (trajet, marchandise ou dangerosité modifiés)
+        const added = checklistFor(m, hazardous)
+          .filter((type) => !current.some((d) => d.type === type))
+          .map((type) => newDocument(uid("doc"), m.id, type, m, at));
+        // échéances recalculées pour les pièces encore sans fichier (dates modifiées)
+        const documents = next.documents.map((d) => (d.missionId === m.id && d.versions.length === 0 ? { ...d, dueAt: defaultDueAt(d.type, m) } : d));
+        next = { ...next, documents: [...documents, ...added] };
       }
       if (isNew && (!m.truckId || !m.driverId)) {
         next = withNotification(next, { kind: "systeme", title: `Mission à affecter — ${m.ref}`, message: "Aucun camion ou chauffeur n'est encore affecté à cette mission.", companyId: m.companyId, link: { kind: "mission", id: m.id } });
@@ -342,16 +380,22 @@ export const actions = {
     });
   },
   deleteMission(id: string) {
-    update((s) => ({
+    update((s) => {
+      const m = s.missions.find((x) => x.id === id);
+      const billed = s.invoices.some((i) => i.missionId === id && (i.status !== "brouillon" || i.payments.length > 0));
+      if (!m || billed) return s;
+      const next: AppData = {
       ...s,
-      missions: s.missions.filter((m) => m.id !== id),
+      missions: s.missions.filter((x) => x.id !== id),
       loads: s.loads.filter((l) => l.missionId !== id),
       incidents: s.incidents.filter((i) => i.missionId !== id),
       documents: s.documents.filter((d) => d.missionId !== id),
       requests: s.requests.filter((r) => r.missionId !== id),
       invoices: s.invoices.filter((x) => x.missionId !== id),
       messages: s.messages.filter((x) => x.missionId !== id),
-    }));
+      };
+      return withActivity(next, { actor: actorOf(s), text: `a supprimé la mission ${m.ref} et ses éléments rattachés`, tone: "warning", companyId: m.companyId }, "modification");
+    });
   },
   /** `forcedReason` : passage forcé malgré des pièces bloquantes (tracé dans l'activité). */
   setMissionStep(id: string, step: OperationStep, by: string, note?: string, forcedReason?: string) {
@@ -366,17 +410,17 @@ export const actions = {
       const delayed = step >= 6 ? false : m.delayed;
       // e-mails de suivi au client sur les jalons choisis (simulation)
       const share = m.clientShare;
-      const reached = share && !share.revoked && share.notifyEmail ? share.notifySteps.filter((st) => st > m.step && st <= step) : [];
+      const reached = share && !share.revoked && share.notifyEmail ? share.notifySteps.filter((st) => st > m.step && st <= step && !share.sentEmails.some((e) => e.step === st)) : [];
       const clientShare = share && reached.length ? { ...share, sentEmails: [...share.sentEmails, ...reached.map((st) => ({ at, step: st, to: share.notifyEmail }))] } : share;
       const updated: Mission = { ...m, step, history, delayed, clientShare };
       const label = OPERATION_STEPS[step].label;
       let next: AppData = { ...s, missions: s.missions.map((x) => (x.id === id ? updated : x)) };
-      next = withActivity(next, { actor: by, text: `a mis à jour ${m.ref} : ${label}`, tone: step >= 6 ? "success" : "info", companyId: m.companyId, link: { kind: "mission", id } });
+      next = withActivity(next, { actor: by, text: `a mis à jour ${m.ref} : ${label}`, tone: step >= 6 ? "success" : "info", companyId: m.companyId, link: { kind: "mission", id } }, "statut");
       if (reached.length && share) {
-        next = withActivity(next, { actor: "LogiTrack", text: `a envoyé l'e-mail de suivi « ${OPERATION_STEPS[step].label} » à ${share.notifyEmail} — ${m.ref}`, tone: "info", companyId: m.companyId, link: { kind: "mission", id } });
+        next = withActivity(next, { actor: "LogiTrack", text: `a envoyé l'e-mail de suivi « ${OPERATION_STEPS[step].label} » à ${share.notifyEmail} — ${m.ref}`, tone: "info", companyId: m.companyId, link: { kind: "mission", id } }, "partage");
       }
       if (forcedReason) {
-        next = withActivity(next, { actor: by, text: `a forcé le passage à « ${label} » sur ${m.ref} malgré des pièces manquantes — ${forcedReason}`, tone: "warning", companyId: m.companyId, link: { kind: "mission", id } });
+        next = withActivity(next, { actor: by, text: `a forcé le passage à « ${label} » sur ${m.ref} malgré des pièces manquantes — ${forcedReason}`, tone: "warning", companyId: m.companyId, link: { kind: "mission", id } }, "statut");
       }
       if (step === 2 || step === 5 || step === 6 || step === 7) {
         next = withNotification(next, { kind: "mission", title: `${label} — ${m.ref}`, message: `${placeName(m.origin)} → ${placeName(m.destination)}. Mise à jour par ${by}.`, companyId: m.companyId, link: { kind: "mission", id } });
@@ -433,7 +477,15 @@ export const actions = {
     });
   },
   deleteIncident(id: string) {
-    update((s) => ({ ...s, incidents: s.incidents.filter((i) => i.id !== id) }));
+    update((s) => {
+      const inc = s.incidents.find((i) => i.id === id);
+      if (!inc) return s;
+      const incidents = s.incidents.filter((i) => i.id !== id);
+      const stillLate = incidents.some((i) => i.missionId === inc.missionId && i.status !== "resolu" && (i.type === "retard" || (i.delayMinutes ?? 0) > 0));
+      const next: AppData = { ...s, incidents, missions: s.missions.map((m) => (m.id === inc.missionId && !stillLate ? { ...m, delayed: false } : m)) };
+      const m = s.missions.find((x) => x.id === inc.missionId);
+      return withActivity(next, { actor: actorOf(s), text: `a supprimé l'incident ${inc.ref}`, tone: "warning", companyId: m?.companyId, link: m ? { kind: "mission", id: m.id } : undefined }, "modification");
+    });
   },
 
   // Documents de transit
@@ -513,7 +565,14 @@ export const actions = {
     });
   },
   setDocumentSharing(id: string, sharedWith: DocAudience[]) {
-    update((s) => ({ ...s, documents: s.documents.map((d) => (d.id === id ? { ...d, sharedWith } : d)) }));
+    update((s) => {
+      const doc = s.documents.find((d) => d.id === id);
+      const m = doc && s.missions.find((x) => x.id === doc.missionId);
+      if (!doc || !m) return s;
+      const next: AppData = { ...s, documents: s.documents.map((d) => (d.id === id ? { ...d, sharedWith } : d)) };
+      const who = sharedWith.length ? sharedWith.join(" et ") : "personne (interne)";
+      return withActivity(next, { actor: actorOf(s), text: `a partagé « ${DOC_TYPES[doc.type].label} » avec ${who} — ${m.ref}`, tone: "info", companyId: m.companyId, link: { kind: "mission", id: m.id } }, "partage");
+    });
   },
   /** Relance du responsable de la pièce (notification simulée). */
   requestDocument(id: string) {
@@ -549,9 +608,15 @@ export const actions = {
         status: "ouverte",
         responses: carrierIds.map((carrierId) => ({ carrierId, status: "envoyee" })),
       };
-      // une nouvelle demande remplace celle encore ouverte sur la mission
-      const requests = s.requests.map((r) => (r.missionId === missionId && r.status === "ouverte" ? { ...r, status: "annulee" as const, closedAt: at } : r));
+      // une nouvelle demande remplace celle encore ouverte sur la mission (les transporteurs sont prévenus)
+      const replaced = s.requests.filter((r) => r.missionId === missionId && r.status === "ouverte");
+      const requests = s.requests.map((r) => (replaced.includes(r) ? { ...r, status: "annulee" as const, closedAt: at } : r));
       let next: AppData = { ...s, requests: [request, ...requests] };
+      for (const r of replaced) {
+        for (const x of r.responses.filter((y) => y.status !== "refusee")) {
+          next = withNotification(next, { kind: "transport", title: `Demande annulée — ${r.ref}`, message: "Le donneur d'ordre a remplacé cette demande.", carrierId: x.carrierId, link: { kind: "mission", id: missionId } });
+        }
+      }
       const names = carrierIds.map((id) => s.carriers.find((c) => c.id === id)?.name ?? id).join(", ");
       next = withActivity(next, { actor: by, text: `a envoyé la demande ${request.ref} (${m.ref}) à ${names}`, tone: "info", companyId: m.companyId, link: { kind: "mission", id: missionId } });
       for (const carrierId of carrierIds) {
@@ -602,13 +667,20 @@ export const actions = {
       const m = r && s.missions.find((x) => x.id === r.missionId);
       const resp = r?.responses.find((x) => x.carrierId === carrierId);
       const carrier = s.carriers.find((c) => c.id === carrierId);
-      if (!r || !m || !resp?.proposal || !carrier) return s;
+      // seule une acceptation sur une demande ouverte, avant le départ, peut être confirmée
+      if (!r || !m || !resp?.proposal || !carrier || r.status !== "ouverte" || resp.status !== "acceptee" || m.step >= 2) return s;
       const at = nowIso();
       const proposal = resp.proposal;
+      // la mission confiée passe en « attente de chargement » : le transporteur peut la faire avancer
+      const launched = m.step === 0;
       let next: AppData = {
         ...s,
         requests: s.requests.map((x) => (x.id === requestId ? { ...x, status: "confirmee" as const, confirmedCarrierId: carrierId, closedAt: at } : x)),
-        missions: s.missions.map((x) => (x.id === m.id ? { ...x, carrierId, carrierAssignment: proposal, truckId: null, driverId: null } : x)),
+        missions: s.missions.map((x) =>
+          x.id === m.id
+            ? { ...x, carrierId, carrierAssignment: proposal, truckId: null, driverId: null, step: launched ? (1 as const) : x.step, history: launched ? [...x.history, { step: 1 as const, at, by, note: `Confiée à ${carrier.name}` }] : x.history }
+            : x,
+        ),
         documents: s.documents.map((d) =>
           d.missionId === m.id && d.type === "ordre_mission" && d.status !== "valide"
             ? {
@@ -633,7 +705,10 @@ export const actions = {
     update((s) => {
       const r = s.requests.find((x) => x.id === requestId);
       if (!r || r.status !== "ouverte") return s;
-      const next: AppData = { ...s, requests: s.requests.map((x) => (x.id === requestId ? { ...x, status: "annulee" as const, closedAt: nowIso() } : x)) };
+      let next: AppData = { ...s, requests: s.requests.map((x) => (x.id === requestId ? { ...x, status: "annulee" as const, closedAt: nowIso() } : x)) };
+      for (const x of r.responses.filter((y) => y.status !== "refusee")) {
+        next = withNotification(next, { kind: "transport", title: `Demande annulée — ${r.ref}`, message: "Le donneur d'ordre a annulé cette demande.", carrierId: x.carrierId, link: { kind: "mission", id: r.missionId } });
+      }
       return withActivity(next, { actor: by, text: `a annulé la demande ${r.ref}`, tone: "info", companyId: r.companyId, link: { kind: "mission", id: r.missionId } });
     });
   },
@@ -661,8 +736,15 @@ export const actions = {
   saveInvoice(inv: Invoice) {
     update((s) => {
       const m = s.missions.find((x) => x.id === inv.missionId);
-      const isNew = !s.invoices.some((x) => x.id === inv.id);
-      const next: AppData = { ...s, invoices: upsert(s.invoices, { ...inv, updatedAt: nowIso() }) };
+      const before = s.invoices.find((x) => x.id === inv.id);
+      const isNew = !before;
+      // un débours est un frais déjà réglé : son paiement suit le montant
+      const saved: Invoice = inv.flow === "debours" && inv.payments.length === 1 ? { ...inv, payments: [{ ...inv.payments[0], amount: inv.amount, at: inv.issuedAt }], updatedAt: nowIso() } : { ...inv, updatedAt: nowIso() };
+      let next: AppData = { ...s, invoices: upsert(s.invoices, saved) };
+      // numéro de facture client modifié : les débours rattachés suivent
+      if (before && before.flow === "client" && before.ref !== inv.ref) {
+        next = { ...next, invoices: next.invoices.map((x) => (x.rebilledOn === before.ref && x.missionId === inv.missionId ? { ...x, rebilledOn: inv.ref } : x)) };
+      }
       return withActivity(next, { actor: actorOf(s), text: `${isNew ? "a enregistré" : "a modifié"} ${INVOICE_FLOWS[inv.flow].label.toLowerCase()} ${inv.ref} (${formatMoney(inv.amount, inv.currency)}) — ${m?.ref ?? ""}`, tone: "info", companyId: m?.companyId, link: m ? { kind: "mission", id: m.id } : undefined });
     });
   },
@@ -678,7 +760,8 @@ export const actions = {
       if (!inv || payment.amount <= 0) return s;
       const payments = [...inv.payments, { ...payment, id: uid("pay") }];
       const paid = payments.reduce((t, p) => t + p.amount, 0);
-      const status: InvoiceStatus = inv.flow === "debours" ? inv.status : paid >= inv.amount ? "payee" : "partielle";
+      // un paiement ne lève pas une contestation : seul l'utilisateur la lève
+      const status: InvoiceStatus = inv.flow === "debours" || inv.status === "contestee" ? inv.status : paid >= inv.amount ? "payee" : "partielle";
       let next: AppData = { ...s, invoices: s.invoices.map((x) => (x.id === id ? { ...x, payments, status, updatedAt: nowIso() } : x)) };
       const verb = inv.flow === "client" ? "a enregistré un encaissement" : "a enregistré un paiement";
       next = withActivity(next, { actor: payment.by, text: `${verb} de ${formatMoney(payment.amount, inv.currency)} sur ${inv.ref}${status === "payee" ? " — soldée" : ""}`, tone: status === "payee" ? "success" : "info", companyId: m?.companyId, link: m ? { kind: "mission", id: m.id } : undefined });
@@ -694,6 +777,10 @@ export const actions = {
       const m = inv && s.missions.find((x) => x.id === inv.missionId);
       if (!inv || inv.status === status) return s;
       let next: AppData = { ...s, invoices: s.invoices.map((x) => (x.id === id ? { ...x, status, note: status === "contestee" || status === "annulee" ? note : x.note, updatedAt: nowIso() } : x)) };
+      // facture client annulée : ses débours redeviennent « à refacturer »
+      if (status === "annulee" && inv.flow === "client") {
+        next = { ...next, invoices: next.invoices.map((x) => (x.flow === "debours" && x.missionId === inv.missionId && x.rebilledOn === inv.ref ? { ...x, rebilledOn: null } : x)) };
+      }
       next = withActivity(next, { actor: actorOf(s), text: `a passé ${inv.ref} au statut « ${INVOICE_STATUS[status].label} »${note ? ` — ${note}` : ""}`, tone: status === "contestee" ? "warning" : "info", companyId: m?.companyId, link: m ? { kind: "mission", id: m.id } : undefined });
       if (status === "contestee") {
         next = withNotification(next, { kind: "facture", title: `Facture contestée — ${inv.ref}`, message: note ?? "", companyId: m?.companyId, link: m ? { kind: "mission", id: m.id } : undefined });
@@ -715,7 +802,13 @@ export const actions = {
     update((s) => ({ ...s, invoices: s.invoices.map((x) => (x.id === id ? { ...x, attachment: { ...file, at: nowIso() }, updatedAt: nowIso() } : x)) }));
   },
   deleteInvoice(id: string) {
-    update((s) => ({ ...s, invoices: s.invoices.filter((x) => x.id !== id) }));
+    update((s) => {
+      const inv = s.invoices.find((x) => x.id === id);
+      const m = inv && s.missions.find((x) => x.id === inv.missionId);
+      if (!inv) return s;
+      const next: AppData = { ...s, invoices: s.invoices.filter((x) => x.id !== id) };
+      return withActivity(next, { actor: actorOf(s), text: `a supprimé le brouillon ${inv.ref}`, tone: "warning", companyId: m?.companyId, link: m ? { kind: "mission", id: m.id } : undefined }, "facture");
+    });
   },
 
   // Partage avec le client
@@ -728,7 +821,7 @@ export const actions = {
         token: newToken(),
         createdAt: at,
         // valable jusqu'à 30 jours après l'arrivée prévue
-        expiresAt: new Date(Date.parse(m.plannedArrival) + 30 * 24 * 3600 * 1000).toISOString(),
+        expiresAt: new Date(Math.max(Date.parse(m.plannedArrival), demoNowMs()) + 30 * 24 * 3600 * 1000).toISOString(),
         revoked: false,
         showPlate: false,
         showDriver: false,
@@ -741,14 +834,21 @@ export const actions = {
     });
   },
   updateClientShare(missionId: string, patch: Partial<Omit<ClientShare, "token" | "createdAt" | "sentEmails">>) {
-    update((s) => ({
-      ...s,
-      missions: s.missions.map((x) => {
-        if (x.id !== missionId || !x.clientShare) return x;
-        const note = patch.publicNote !== undefined && patch.publicNote !== x.clientShare.publicNote ? { publicNoteAt: nowIso() } : {};
-        return { ...x, clientShare: { ...x.clientShare, ...patch, ...note } };
-      }),
-    }));
+    update((s) => {
+      const m = s.missions.find((x) => x.id === missionId);
+      if (!m?.clientShare) return s;
+      const share = m.clientShare;
+      const noteAt = "publicNote" in patch && patch.publicNote !== share.publicNote ? { publicNoteAt: nowIso() } : {};
+      let next: AppData = { ...s, missions: s.missions.map((x) => (x.id === missionId ? { ...x, clientShare: { ...share, ...patch, ...noteAt } } : x)) };
+      // ce que voit le client est tracé (données personnelles du chauffeur notamment)
+      const changes = [
+        patch.showDriver !== undefined && patch.showDriver !== share.showDriver && (patch.showDriver ? "affiche le chauffeur" : "masque le chauffeur"),
+        patch.showPlate !== undefined && patch.showPlate !== share.showPlate && (patch.showPlate ? "affiche l'immatriculation" : "masque l'immatriculation"),
+        "publicNote" in patch && patch.publicNote !== share.publicNote && (patch.publicNote ? "publie un message" : "retire le message"),
+      ].filter(Boolean);
+      if (changes.length) next = withActivity(next, { actor: actorOf(s), text: `lien de suivi client de ${m.ref} : ${changes.join(", ")}`, tone: "info", companyId: m.companyId, link: { kind: "mission", id: m.id } }, "partage");
+      return next;
+    });
   },
   /** Révoque le lien et en génère un nouveau à la demande (l'ancien cesse de fonctionner). */
   revokeClientShare(missionId: string, by: string) {

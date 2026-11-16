@@ -175,7 +175,7 @@ function NotificationsMenu({ allHref }: { allHref?: string }) {
               <CheckCheck className="size-3.5" /> Tout marquer comme lu
             </button>
           </div>
-          <div className="max-h-96 overflow-y-auto p-1.5">
+          <div className="max-h-[min(24rem,calc(100dvh-10rem))] overflow-y-auto p-1.5">
             {recent.map((n) => (
               <button
                 key={n.id}
@@ -267,7 +267,7 @@ function UserMenu({ name, role, color, variant }: { name: string; role: string; 
         <ChevronDown className="hidden size-4 text-slate-400 md:block" />
       </button>
       {popOpen && (
-        <div className="absolute top-12 right-0 z-50 w-60 animate-scale-in rounded-2xl border border-slate-200 bg-white p-1.5 shadow-pop">
+        <div className="absolute top-12 right-0 z-50 max-h-[calc(100dvh-5rem)] w-64 animate-scale-in overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-pop">
           <div className="border-b border-slate-100 px-3 py-2.5">
             <p className="text-sm font-semibold">{name}</p>
             <p className="text-xs text-slate-500">{role}</p>
@@ -298,21 +298,17 @@ function UserMenu({ name, role, color, variant }: { name: string; role: string; 
   );
 }
 
-export function Header({ onMenu, userName, userRole, userColor, notificationsHref, leading, variant }: { onMenu: () => void; userName: string; userRole: string; userColor: string; notificationsHref?: string; leading?: React.ReactNode; variant: "admin" | "company" }) {
+export function Header({ onMenu, userName, userRole, userColor, notificationsHref, leading, variant, locked = false }: { onMenu: () => void; userName: string; userRole: string; userColor: string; notificationsHref?: string; leading?: React.ReactNode; variant: "admin" | "company"; locked?: boolean }) {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-slate-200/80 bg-white/85 px-4 backdrop-blur-md sm:px-6">
       <button onClick={onMenu} className="inline-flex size-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100 lg:hidden" aria-label="Ouvrir le menu">
         <Menu className="size-5" />
       </button>
       {leading}
-      <div className="hidden flex-1 sm:block">
-        <GlobalSearch />
-      </div>
-      <div className="flex flex-1 justify-end sm:hidden">
-        <MobileSearchButton />
-      </div>
+      <div className="hidden flex-1 sm:block">{!locked && <GlobalSearch />}</div>
+      <div className="flex flex-1 justify-end sm:hidden">{!locked && <MobileSearchButton />}</div>
       <div className="flex items-center gap-1">
-        <NotificationsMenu allHref={notificationsHref} />
+        {!locked && <NotificationsMenu allHref={notificationsHref} />}
         <UserMenu name={userName} role={userRole} color={userColor} variant={variant} />
       </div>
     </header>

@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Clock,
   FileWarning,
+  Handshake,
   IdCard,
   Plus,
   Receipt,
@@ -69,6 +70,8 @@ export function DashboardView() {
   const latest = [...missions].sort((a, b) => lastUpdate(b).localeCompare(lastUpdate(a))).slice(0, 6);
   const unassigned = missions.filter((m) => m.step < 6 && !isAssigned(m));
   const blockedTrucks = trucks.filter((t) => t.status === "immobilise" || t.status === "maintenance");
+  // un transporteur a accepté : la mission attend la confirmation de l'exploitation
+  const toConfirm = data.requests.filter((r) => r.status === "ouverte" && r.responses.some((x) => x.status === "acceptee"));
   const overdueInvoices = can("invoice.view") ? data.invoices.filter(isOverdueInvoice) : [];
   const unbilled = can("invoice.view") ? data.invoices.filter((i) => toRebill(i) && (lookups.mission(i.missionId)?.step ?? 0) >= 7) : [];
   const docAlerts = data.documents.filter((d) => (isOverdue(d) || d.status === "a_corriger") && (lookups.mission(d.missionId)?.step ?? 7) < 7);
@@ -77,6 +80,7 @@ export function DashboardView() {
       .filter((i) => i.severity === "critique" || i.severity === "elevee")
       .map((i) => ({ id: i.id, tone: i.severity === "critique" ? "red" : "orange", icon: AlertTriangle, title: `${INCIDENT_TYPES[i.type]} — ${lookups.mission(i.missionId)?.ref ?? ""}`, sub: i.location, onClick: () => open({ kind: "incident", id: i.id }) })),
     ...docAlerts.map((d) => ({ id: d.id, tone: "red", icon: FileWarning, title: `${d.status === "a_corriger" ? "Pièce à corriger" : "Pièce en retard"} — ${lookups.mission(d.missionId)?.ref ?? ""}`, sub: DOC_TYPES[d.type].label, onClick: () => open({ kind: "mission", id: d.missionId }) })),
+    ...toConfirm.map((r) => ({ id: r.id, tone: "blue", icon: Handshake, title: `Acceptation à confirmer — ${lookups.mission(r.missionId)?.ref ?? r.ref}`, sub: r.responses.filter((x) => x.status === "acceptee").map((x) => lookups.carrier(x.carrierId)?.name).join(", "), onClick: () => open({ kind: "mission", id: r.missionId }) })),
     ...overdueInvoices.map((i) => ({ id: i.id, tone: "red", icon: Receipt, title: `Facture en retard — ${i.ref}`, sub: `${i.counterpartyName} · ${formatMoney(remaining(i), i.currency)}`, onClick: () => open({ kind: "mission", id: i.missionId }) })),
     ...unbilled.map((i) => ({ id: i.id, tone: "orange", icon: Receipt, title: `Débours non refacturé — ${lookups.mission(i.missionId)?.ref ?? ""}`, sub: `${i.label} · ${formatMoney(i.amount, i.currency)}`, onClick: () => open({ kind: "mission", id: i.missionId }) })),
     ...delayed.map((m) => ({ id: m.id, tone: "orange", icon: Clock, title: `Retard — ${m.ref}`, sub: `${placeName(m.origin)} → ${placeName(m.destination)}`, onClick: () => open({ kind: "mission", id: m.id }) })),

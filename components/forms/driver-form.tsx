@@ -12,6 +12,7 @@ import { DriverAvatar } from "@/components/ui/media";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { required, useForm } from "./use-form";
+import { demoNowIso } from "@/lib/utils/clock";
 
 const COLORS = ["#2563EB", "#0F9F83", "#7C3AED", "#EA580C", "#0E7490", "#B45309", "#DB2777", "#101E35"];
 
@@ -51,7 +52,7 @@ function Inner({ onClose, driver }: { onClose: () => void; driver?: Driver }) {
       licenseExpiry: fromLocalInput(`${expiryDate}T12:00`),
       id: driver?.id ?? actions.newDriverId(),
       rating: driver?.rating ?? 4.5,
-      joinedAt: driver?.joinedAt ?? new Date().toISOString(),
+      joinedAt: driver?.joinedAt ?? demoNowIso(),
     });
     toast(driver ? "Chauffeur mis à jour" : "Chauffeur ajouté", { message: `${v.firstName} ${v.lastName}` });
     onClose();

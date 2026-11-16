@@ -182,7 +182,7 @@ export function MissionDetail({ id }: { id: string }) {
         ) : (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           {next ? (
-            <Button variant={next.step >= 6 ? "success" : "primary"} iconRight={ChevronRight} className="flex-1" onClick={() => advance(next.step)}>
+            <Button variant={next.step >= 6 ? "success" : "primary"} iconRight={ChevronRight} className="h-auto min-h-10 flex-1 py-2 whitespace-normal" onClick={() => advance(next.step)}>
               Passer à : {next.label}
             </Button>
           ) : (

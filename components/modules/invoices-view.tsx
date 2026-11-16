@@ -55,6 +55,7 @@ export function InvoicesView() {
     {
       key: "mission",
       header: "Mission",
+      hideBelow: "sm",
       cell: (i) => (
         <LinkButton className="font-mono text-xs" onClick={() => open({ kind: "mission", id: i.missionId })}>
           {lookups.mission(i.missionId)?.ref ?? "—"}
@@ -102,11 +103,11 @@ export function InvoicesView() {
         title="Factures et paiements"
         description="Suivi des factures clients, des factures transporteurs et des débours, rattachés aux missions. Aucun fonds ne transite par la plateforme."
       />
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Reste à encaisser" value={<span className="text-base sm:text-lg">{formatTotals(totalsByCurrency(receivable))}</span>} icon={Wallet} tone="blue" hint={`${receivable.length} facture(s) client`} onClick={() => setTab("encaisser")} />
-        <StatCard label="En retard de paiement" value={<span className="text-base sm:text-lg">{formatTotals(totalsByCurrency(overdue))}</span>} icon={AlarmClock} tone="red" hint={`${overdue.length} facture(s) échue(s)`} onClick={() => setTab("retard")} />
-        <StatCard label="À payer aux transporteurs" value={<span className="text-base sm:text-lg">{formatTotals(totalsByCurrency(payable))}</span>} icon={HandCoins} tone="orange" hint={`${payable.length} facture(s)`} onClick={() => setTab("payer")} />
-        <StatCard label="Débours à refacturer" value={<span className="text-base sm:text-lg">{formatTotals(totalsByCurrency(rebill, "amount"))}</span>} icon={Receipt} tone="violet" hint={`${rebill.length} débours`} onClick={() => setTab("refacturer")} />
+      <div className="mb-6 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Reste à encaisser" value={<span className="text-base leading-tight sm:text-lg">{formatTotals(totalsByCurrency(receivable))}</span>} icon={Wallet} tone="blue" hint={`${receivable.length} facture(s) client`} onClick={() => setTab("encaisser")} />
+        <StatCard label="En retard de paiement" value={<span className="text-base leading-tight sm:text-lg">{formatTotals(totalsByCurrency(overdue))}</span>} icon={AlarmClock} tone="red" hint={`${overdue.length} facture(s) échue(s)`} onClick={() => setTab("retard")} />
+        <StatCard label="À payer aux transporteurs" value={<span className="text-base leading-tight sm:text-lg">{formatTotals(totalsByCurrency(payable))}</span>} icon={HandCoins} tone="orange" hint={`${payable.length} facture(s)`} onClick={() => setTab("payer")} />
+        <StatCard label="Débours à refacturer" value={<span className="text-base leading-tight sm:text-lg">{formatTotals(totalsByCurrency(rebill, "amount"))}</span>} icon={Receipt} tone="violet" hint={`${rebill.length} débours`} onClick={() => setTab("refacturer")} />
       </div>
       <div className="mb-4">
         <Segmented

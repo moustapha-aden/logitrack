@@ -2,7 +2,8 @@
 
 import { Route, Save } from "lucide-react";
 import { actions, actorOf, useAppData } from "@/lib/store";
-import { useData } from "@/lib/store/selectors";
+import { useData, usePermissions } from "@/lib/store/selectors";
+import { demoNowIso } from "@/lib/utils/clock";
 import { GOODS_TYPES, TRUCK_STATUS, DRIVER_AVAILABILITY } from "@/lib/constants";
 import { PLACES, routeDistanceKm } from "@/lib/data/geo";
 import { tripHours } from "@/lib/data/seed";
@@ -39,6 +40,7 @@ function Inner({ onClose, mission }: { onClose: () => void; mission?: Mission })
   const { toast } = useToast();
   const raw = useAppData();
   const { scope, all, lookups } = useData();
+  const { can } = usePermissions();
   const owners = all.companies.filter((c) => c.type !== "client" && c.status === "actif");
   const clients = all.companies.filter((c) => c.type === "client");
   const existingLoad = mission ? lookups.loadOfMission(mission.id) : undefined;
@@ -79,7 +81,6 @@ function Inner({ onClose, mission }: { onClose: () => void; mission?: Mission })
 
   const trucks = all.trucks.filter((t) => t.companyId === values.companyId);
   const drivers = all.drivers.filter((d) => d.companyId === values.companyId);
-  const carriers = all.carriers.filter((c) => c.companyId === values.companyId && c.status === "actif");
   const km = values.origin !== values.destination ? routeDistanceKm(values.origin, values.destination) : 0;
 
   const recomputeArrival = (departure: string, destination: string) => {
@@ -89,15 +90,20 @@ function Inner({ onClose, mission }: { onClose: () => void; mission?: Mission })
   };
 
   const save = submit((v) => {
-    const draft = mission ?? { ...actions.newMissionDraft(raw), step: 0 as const, delayed: false, history: [], createdAt: new Date().toISOString() };
-    const createdHistory = mission ? mission.history : [{ step: 0 as const, at: new Date().toISOString(), by: actorOf(raw) }];
+    const draft = mission ?? { ...actions.newMissionDraft(raw), step: 0 as const, delayed: false, history: [], createdAt: demoNowIso() };
+    const createdHistory = mission ? mission.history : [{ step: 0 as const, at: demoNowIso(), by: actorOf(raw) }];
+    // choisir un camion ou un chauffeur de la flotte propre retire la mission au transporteur partenaire
+    const ownFleet = !!(v.truckId || v.driverId);
+    const keepCarrier = !!mission?.carrierAssignment && !ownFleet;
     actions.saveMission(
       {
         ...draft,
         history: createdHistory,
         companyId: v.companyId,
         clientId: v.clientId,
-        carrierId: v.carrierId || null,
+        // le transporteur ne se choisit pas ici : il est confié via une demande de transport
+        carrierId: keepCarrier ? (mission?.carrierId ?? null) : ownFleet ? null : (mission?.carrierId ?? null),
+        carrierAssignment: keepCarrier ? mission?.carrierAssignment : null,
         truckId: v.truckId || null,
         driverId: v.driverId || null,
         origin: v.origin,
@@ -156,7 +162,7 @@ function Inner({ onClose, mission }: { onClose: () => void; mission?: Mission })
                   }}
                 >
                   {all.companies
-                    .filter((c) => c.type !== "client")
+                    .filter((c) => c.type !== "client" && (c.status === "actif" || c.id === values.companyId))
                     .map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -200,16 +206,15 @@ function Inner({ onClose, mission }: { onClose: () => void; mission?: Mission })
                   ))}
                 </Select>
               </Field>
-              <Field label="Transporteur partenaire" className="sm:col-span-2">
-                <Select value={values.carrierId} onChange={(e) => set("carrierId", e.target.value)}>
-                  <option value="">— Flotte propre —</option>
-                  {carriers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              <div className="rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-600 sm:col-span-2">
+                {mission?.carrierAssignment ? (
+                  <>
+                    Confiée à <strong className="text-ink">{all.carriers.find((c) => c.id === mission.carrierId)?.name ?? "un transporteur partenaire"}</strong> ({mission.carrierAssignment.plate} · {mission.carrierAssignment.driverName}). Choisir un camion de votre flotte lui retirera la mission.
+                  </>
+                ) : (
+                  <>Pour confier la mission à un transporteur partenaire, laissez camion et chauffeur vides puis utilisez « Demander à un transporteur » dans la fiche mission.</>
+                )}
+              </div>
             </FormGrid>
           </FormSection>
           <FormSection title="Itinéraire et planification">
@@ -272,9 +277,11 @@ function Inner({ onClose, mission }: { onClose: () => void; mission?: Mission })
                   ))}
                 </Select>
               </Field>
-              <Field label="Tarif de la mission (DJF)" required error={errors.priceDjf} hint={values.priceDjf > 0 ? formatDjf(values.priceDjf) : undefined}>
-                <Input type="number" min={0} step={10000} value={values.priceDjf} onChange={(e) => set("priceDjf", Number(e.target.value))} />
-              </Field>
+              {can("price.view") && (
+                <Field label="Tarif de la mission (DJF)" required error={errors.priceDjf} hint={values.priceDjf > 0 ? formatDjf(values.priceDjf) : undefined}>
+                  <Input type="number" min={0} step={10000} value={values.priceDjf} onChange={(e) => set("priceDjf", Number(e.target.value))} />
+                </Field>
+              )}
               <Field label="Description du chargement" required error={errors.description} className="sm:col-span-2">
                 <Textarea value={values.description} onChange={(e) => set("description", e.target.value)} invalid={!!errors.description} placeholder="Ex. 1 × 40' riz en sacs de 50 kg" />
               </Field>
