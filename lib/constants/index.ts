@@ -171,6 +171,14 @@ export const CURRENCIES = ["DJF", "USD", "ETB", "EUR"] as const;
 /** Objets de débours courants (liste indicative). */
 export const DEBOURS_LABELS = ["Droits et taxes", "Frais portuaires et manutention", "Magasinage", "Surestaries conteneur", "Frais de scanner", "Autre débours"];
 
+// ── Vitrine publique ─────────────────────────────────────────
+export const LEAD_STATUS: Record<"nouvelle" | "contactee" | "convertie" | "close", Meta> = {
+  nouvelle: { label: "Nouvelle", tone: "orange" },
+  contactee: { label: "Client rappelé", tone: "blue" },
+  convertie: { label: "Mission créée", tone: "green" },
+  close: { label: "Classée sans suite", tone: "neutral" },
+};
+
 // ── Demandes de transport ────────────────────────────────────
 export const RESPONSE_STATUS: Record<"envoyee" | "vue" | "acceptee" | "refusee", Meta> = {
   envoyee: { label: "Envoyée", tone: "neutral" },

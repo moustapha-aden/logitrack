@@ -26,7 +26,7 @@ function Inner({ onClose, company }: { onClose: () => void; company?: Company })
 
   const save = submit((v) => {
     const id = company?.id ?? actions.newCompanyId();
-    actions.saveCompany({ ...v, id, initials: initials(v.name), createdAt: company?.createdAt ?? demoNowIso() });
+    actions.saveCompany({ ...v, id, initials: initials(v.name), createdAt: company?.createdAt ?? demoNowIso(), listed: company?.listed ?? false });
     toast(company ? "Entreprise mise à jour" : "Entreprise ajoutée", { message: v.name });
     onClose();
   });

@@ -20,7 +20,7 @@ import { isOverdueInvoice } from "@/lib/utils/invoices";
 type Variant = "admin" | "company";
 
 function useBadgeCount(badge: NavItem["badge"]): number {
-  const { incidents, notifications, missions, documents, invoices } = useData();
+  const { incidents, notifications, missions, documents, invoices, leads } = useData();
   if (badge === "incidents") return incidents.filter((i) => i.status === "nouveau").length;
   if (badge === "notifications") return notifications.filter((n) => !n.read).length;
   if (badge === "delayed") return missions.filter((m) => m.delayed && m.step < 6).length;
@@ -32,6 +32,7 @@ function useBadgeCount(badge: NavItem["badge"]): number {
     }).length;
   }
   if (badge === "invoices") return invoices.filter(isOverdueInvoice).length;
+  if (badge === "leads") return leads.filter((l) => l.status === "nouvelle").length;
   return 0;
 }
 
@@ -56,7 +57,7 @@ function NavLink({ item, active, variant, onNavigate }: { item: NavItem; active:
       <item.icon className={cn("size-[18px] shrink-0", dark ? (active ? "text-brand-500" : "text-slate-500 group-hover:text-slate-300") : active ? "text-success-600" : "text-slate-400")} />
       <span className="flex-1 truncate">{item.label}</span>
       {count > 0 && (
-        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums", item.badge === "incidents" || item.badge === "documents" || item.badge === "invoices" ? "bg-red-500 text-white" : item.badge === "delayed" ? "bg-amber-500 text-white" : dark ? "bg-brand-600 text-white" : "bg-brand-600 text-white")}>{count}</span>
+        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums", item.badge === "incidents" || item.badge === "documents" || item.badge === "invoices" || item.badge === "leads" ? "bg-red-500 text-white" : item.badge === "delayed" ? "bg-amber-500 text-white" : dark ? "bg-brand-600 text-white" : "bg-brand-600 text-white")}>{count}</span>
       )}
     </Link>
   );

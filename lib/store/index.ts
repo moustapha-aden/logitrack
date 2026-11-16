@@ -38,6 +38,7 @@ import type {
   Prefs,
   Settings,
   Truck,
+  TransportLead,
   TransportRequest,
   TruckStatus,
 } from "@/types";
@@ -929,6 +930,67 @@ export const actions = {
   },
   logAudit(action: AuditAction, text: string, companyId?: string) {
     update((s) => withAudit(s, { actor: actorOf(s), companyId, action, text }));
+  },
+
+  // Vitrine publique
+  /** Publication d'un camion sur la vitrine : uniquement avec l'accord de l'entreprise propriétaire. */
+  setTruckPublished(id: string, published: boolean) {
+    update((s) => {
+      const t = s.trucks.find((x) => x.id === id);
+      if (!t) return s;
+      const next: AppData = { ...s, trucks: s.trucks.map((x) => (x.id === id ? { ...x, published } : x)) };
+      return withActivity(next, { actor: actorOf(s), text: `a ${published ? "publié" : "retiré"} le camion ${t.plate} ${published ? "dans" : "de"} l'annuaire public`, tone: "info", companyId: t.companyId, link: { kind: "truck", id } }, "partage");
+    });
+  },
+  /** Demande envoyée par un visiteur de l'annuaire : transmise uniquement à l'entreprise concernée. */
+  submitLead(input: Omit<TransportLead, "id" | "ref" | "createdAt" | "status" | "updatedAt">): string {
+    let ref = "";
+    update((s) => {
+      const c = s.companies.find((x) => x.id === input.companyId);
+      if (!c) return s;
+      const t = input.truckId ? s.trucks.find((x) => x.id === input.truckId) : undefined;
+      const d = input.driverId ? s.drivers.find((x) => x.id === input.driverId) : undefined;
+      const target = t ? `camion ${t.plate}` : d ? `chauffeur ${driverName(d)}` : "entreprise";
+      const at = nowIso();
+      ref = nextRef("VT", s.leads.map((l) => l.ref), 10);
+      const lead: TransportLead = { ...input, id: uid("lead"), ref, createdAt: at, status: "nouvelle", updatedAt: at };
+      let next: AppData = { ...s, leads: [lead, ...s.leads] };
+      next = withNotification(next, {
+        kind: "transport",
+        title: `Nouvelle demande via l'annuaire — ${ref}`,
+        message: `${input.name} (${input.phone}) : ${placeName(input.origin)} → ${placeName(input.destination)} (${target}). À rappeler.`,
+        companyId: c.id,
+        link: t ? { kind: "truck", id: t.id } : d ? { kind: "driver", id: d.id } : { kind: "company", id: c.id },
+      });
+      return withAudit(next, { actor: input.name, role: "Visiteur de l'annuaire", companyId: c.id, action: "modification", text: `a envoyé une demande via l'annuaire (${target}, ${ref})` });
+    });
+    return ref;
+  },
+  setDriverPublished(id: string, published: boolean) {
+    update((s) => {
+      const d = s.drivers.find((x) => x.id === id);
+      if (!d) return s;
+      const next: AppData = { ...s, drivers: s.drivers.map((x) => (x.id === id ? { ...x, published } : x)) };
+      return withActivity(next, { actor: actorOf(s), text: `a ${published ? "publié" : "retiré"} le profil du chauffeur ${driverName(d)} ${published ? "dans" : "de"} l'annuaire public`, tone: "info", companyId: d.companyId, link: { kind: "driver", id } }, "partage");
+    });
+  },
+  setCompanyListed(id: string, listed: boolean) {
+    update((s) => {
+      const c = s.companies.find((x) => x.id === id);
+      if (!c) return s;
+      const next: AppData = { ...s, companies: s.companies.map((x) => (x.id === id ? { ...x, listed } : x)) };
+      return withActivity(next, { actor: actorOf(s), text: `a ${listed ? "présenté" : "retiré"} ${c.name} ${listed ? "dans" : "de"} l'annuaire public`, tone: "info", companyId: id, link: { kind: "company", id } }, "partage");
+    });
+  },
+  setLeadStatus(id: string, status: TransportLead["status"]) {
+    update((s) => {
+      const lead = s.leads.find((l) => l.id === id);
+      if (!lead || lead.status === status) return s;
+      const by = actorOf(s);
+      const next: AppData = { ...s, leads: s.leads.map((l) => (l.id === id ? { ...l, status, handledBy: by, updatedAt: nowIso() } : l)) };
+      const label = { nouvelle: "nouvelle", contactee: "client rappelé", convertie: "mission créée", close: "classée sans suite" }[status];
+      return withActivity(next, { actor: by, text: `a passé la demande de l'annuaire ${lead.ref} (${lead.name}) à « ${label} »`, tone: status === "convertie" ? "success" : "info", companyId: lead.companyId }, "modification");
+    });
   },
 
   // Notifications

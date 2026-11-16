@@ -3,7 +3,7 @@
 import { createContext, useContext, useMemo } from "react";
 import { useAppData } from "@/lib/store";
 import { roleCan, ROLES, type Permission } from "@/lib/permissions";
-import type { AppData, AuditEntry, Carrier, CompanyRole, CompanyUser, Company, Driver, Incident, Invoice, Load, Mission, MissionDocument, MissionMessage, TransportRequest, Truck } from "@/types";
+import type { AppData, AuditEntry, TransportLead, Carrier, CompanyRole, CompanyUser, Company, Driver, Incident, Invoice, Load, Mission, MissionDocument, MissionMessage, TransportRequest, Truck } from "@/types";
 
 /** Périmètre courant : null = administration (toutes les entreprises). */
 export const ScopeContext = createContext<string | null>(null);
@@ -52,6 +52,7 @@ export interface ScopedData {
   messages: MissionMessage[];
   invoices: Invoice[];
   audit: AuditEntry[];
+  leads: TransportLead[];
   notifications: AppData["notifications"];
   activity: AppData["activity"];
   lookups: Lookups;
@@ -84,6 +85,7 @@ export function useData(): ScopedData {
       messages: data.messages.filter((x) => missionIds.has(x.missionId)),
       invoices: data.invoices.filter((x) => missionIds.has(x.missionId)),
       audit: data.audit.filter((a) => a.companyId === scope),
+      leads: data.leads.filter((l) => l.companyId === scope),
       notifications: data.notifications.filter((n) => n.companyId === scope),
       activity: data.activity.filter((a) => a.companyId === scope),
       lookups,

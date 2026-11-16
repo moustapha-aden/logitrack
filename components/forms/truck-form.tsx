@@ -60,6 +60,7 @@ function Inner({ onClose, truck }: { onClose: () => void; truck?: Truck }) {
       id: truck?.id ?? actions.newTruckId(),
       lastService: truck?.lastService ?? now.toISOString(),
       insuranceUntil: truck?.insuranceUntil ?? new Date(now.getTime() + 365 * 86400000).toISOString(),
+      published: truck?.published ?? false,
     });
     toast(truck ? "Camion mis à jour" : "Camion ajouté à la flotte", { message: v.plate.toUpperCase() });
     onClose();

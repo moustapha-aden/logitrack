@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  Megaphone,
   BadgeCheck,
   Building2,
   CalendarClock,
@@ -289,6 +290,17 @@ export function TruckDetail({ id }: { id: string }) {
               {TRUCK_STATUS[s].label}
             </Button>
           ))}
+          <Button
+            variant={t.published ? "dark" : "ghost"}
+            size="sm"
+            icon={Megaphone}
+            onClick={() => {
+              actions.setTruckPublished(t.id, !t.published);
+              toast(t.published ? "Retiré de l'annuaire" : "Publié dans l'annuaire", { message: t.plate });
+            }}
+          >
+            {t.published ? "Dans l'annuaire" : "Publier dans l'annuaire"}
+          </Button>
           <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600 hover:bg-red-50" onClick={() => setConfirm(true)} disabled={!!current}>
             Supprimer
           </Button>

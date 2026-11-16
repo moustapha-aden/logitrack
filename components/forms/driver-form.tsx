@@ -53,6 +53,7 @@ function Inner({ onClose, driver }: { onClose: () => void; driver?: Driver }) {
       id: driver?.id ?? actions.newDriverId(),
       rating: driver?.rating ?? 4.5,
       joinedAt: driver?.joinedAt ?? demoNowIso(),
+      published: driver?.published ?? false,
     });
     toast(driver ? "Chauffeur mis à jour" : "Chauffeur ajouté", { message: `${v.firstName} ${v.lastName}` });
     onClose();

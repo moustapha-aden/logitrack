@@ -25,6 +25,7 @@ import type {
   MissionMessage,
   TransportRequest,
   CarrierAssignment,
+  TransportLead,
   AuditEntry,
   CompanyUser,
   ClientShare,
@@ -35,7 +36,7 @@ import type {
   TruckType,
 } from "@/types";
 
-export const DATA_VERSION = 12;
+export const DATA_VERSION = 14;
 
 const NOW = new Date(DEMO_NOW).getTime();
 const H = 3600 * 1000;
@@ -706,6 +707,21 @@ const auditBase: AuditEntry[] = [
   { id: "aud-x3", at: iso("2026-11-05T16:30:00+03:00"), actor: "Mohamed Said Elmi", role: "Comptabilité", companyId: "cmp-hfl", action: "export" as const, text: "a exporté la liste des missions (CSV, 30 lignes)" },
 ].sort((a, b) => b.at.localeCompare(a.at));
 
+// ── Vitrine publique : camions publiés et demandes reçues ────
+/** Camions que leur entreprise a choisi de montrer sur la vitrine (/marketing). */
+const PUBLISHED_TRUCKS = new Set(["t01", "t03", "t05", "t07", "t09", "t10", "t12", "t14", "t15", "t17", "t18", "t19", "t22", "t23"]);
+/** Chauffeurs dont le profil (prénom, initiale, expérience) est publié avec leur accord. */
+const PUBLISHED_DRIVERS = new Set(["d01", "d02", "d03", "d05", "d06", "d08", "d09", "d10", "d12", "d13", "d15", "d16", "d17", "d19", "d20"]);
+/** Entreprises présentées dans l'annuaire public. */
+const LISTED_COMPANIES = new Set(["cmp-hfl", "cmp-rsh", "cmp-tcs", "cmp-bts", "cmp-dle", "cmp-hts"]);
+
+export const leads: TransportLead[] = [
+  { id: "lead-1", ref: "VT-26-0011", truckId: "t03", companyId: "cmp-hfl", createdAt: iso("2026-11-08T08:40:00+03:00"), name: "Houssein Omar Ali", phone: "+253 77 88 14 02", email: "h.omar@btp-tadjourah.dj", organisation: "BTP Tadjourah", origin: "doraleh", destination: "tadjourah", date: iso("2026-11-11T07:00:00+03:00"), goodsType: "materiaux", message: "Environ 30 t de fers à béton, déchargement sur chantier.", status: "nouvelle", updatedAt: iso("2026-11-08T08:40:00+03:00") },
+  { id: "lead-2", ref: "VT-26-0012", truckId: "t05", companyId: "cmp-hfl", createdAt: iso("2026-11-07T15:20:00+03:00"), name: "Amina Youssouf", phone: "+253 77 21 63 90", organisation: "Café Harar Import", origin: "port-djibouti", destination: "dire-dawa", date: iso("2026-11-13T05:00:00+03:00"), goodsType: "conteneurs", message: "1 × 20' de café vert, transit vers Dire Dawa.", status: "contactee", handledBy: "Kadra Ali Waberi · HF", updatedAt: iso("2026-11-07T17:05:00+03:00") },
+  { id: "lead-4", ref: "VT-26-0014", driverId: "d01", companyId: "cmp-hfl", createdAt: iso("2026-11-08T07:15:00+03:00"), name: "Fozia Abdillahi", phone: "+253 77 66 12 08", organisation: "Minoterie de l'Afrique de l'Est", origin: "port-djibouti", destination: "ali-sabieh", date: iso("2026-11-12T06:00:00+03:00"), goodsType: "vrac", message: "Nous souhaitons travailler avec ce chauffeur sur nos prochaines rotations de blé.", status: "nouvelle", updatedAt: iso("2026-11-08T07:15:00+03:00") },
+  { id: "lead-3", ref: "VT-26-0013", truckId: "t10", companyId: "cmp-rsh", createdAt: iso("2026-11-08T09:55:00+03:00"), name: "Mahdi Aden Robleh", phone: "+253 77 40 09 33", origin: "doraleh", destination: "galafi", date: iso("2026-11-10T06:00:00+03:00"), goodsType: "conteneurs", status: "nouvelle", updatedAt: iso("2026-11-08T09:55:00+03:00") },
+];
+
 // ── Statistiques mensuelles (historique consolidé fictif) ────
 const months = ["2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11"];
 const missionCounts = [118, 124, 131, 127, 142, 138, 151, 147, 156, 163, 171, 64];
@@ -736,10 +752,10 @@ export function createSeed(): AppData {
   const { trucks, drivers } = reconcile(trucksBase, driversBase, missionsBase);
   return {
     version: DATA_VERSION,
-    companies: structuredClone(companies),
+    companies: structuredClone(companies).map((c) => ({ ...c, listed: LISTED_COMPANIES.has(c.id) })),
     carriers: structuredClone(carriers),
-    trucks,
-    drivers,
+    trucks: trucks.map((t) => ({ ...t, published: PUBLISHED_TRUCKS.has(t.id) })),
+    drivers: drivers.map((d) => ({ ...d, published: PUBLISHED_DRIVERS.has(d.id) })),
     missions: structuredClone(missionsBase),
     loads: structuredClone(loadsBase),
     incidents: structuredClone(incidents),
@@ -749,6 +765,7 @@ export function createSeed(): AppData {
     invoices: structuredClone(invoicesBase),
     users: structuredClone(users),
     audit: structuredClone(auditBase),
+    leads: structuredClone(leads),
     notifications: structuredClone(notifications),
     activity: structuredClone(activity),
     monthly: structuredClone(monthly),

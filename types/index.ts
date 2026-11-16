@@ -19,6 +19,8 @@ export interface Company {
   nif: string; // numéro d'identification fiscale fictif
   status: ActiveStatus;
   createdAt: string; // ISO
+  /** Présentée dans l'annuaire public (/marketing) avec l'accord de l'entreprise. */
+  listed?: boolean;
 }
 
 export type CarrierStatus = "actif" | "inactif" | "suspendu";
@@ -59,6 +61,8 @@ export interface Truck {
   mileageKm: number;
   lastService: string; // ISO
   insuranceUntil: string; // ISO
+  /** Publié sur la vitrine publique (/marketing) avec l'accord de l'entreprise. */
+  published?: boolean;
 }
 
 export type DriverAvailability = "disponible" | "en_mission" | "repos" | "conge";
@@ -78,6 +82,8 @@ export interface Driver {
   rating: number; // /5
   avatarColor: string;
   joinedAt: string;
+  /** Profil publié dans l'annuaire public (prénom, initiale, expérience — jamais le téléphone). */
+  published?: boolean;
 }
 
 /** Étapes du suivi des opérations (index 0 → 7). */
@@ -373,6 +379,31 @@ export interface Settings {
   compactTables: boolean;
 }
 
+// ── Vitrine publique : demandes de transport des visiteurs ───
+export type LeadStatus = "nouvelle" | "contactee" | "convertie" | "close";
+
+export interface TransportLead {
+  id: string;
+  ref: string;
+  /** Cible de la demande : un camion, un chauffeur, ou l'entreprise seule. */
+  truckId?: string;
+  driverId?: string;
+  companyId: string;
+  createdAt: string;
+  name: string;
+  phone: string;
+  email?: string;
+  organisation?: string;
+  origin: string; // id de lieu
+  destination: string;
+  date: string; // date souhaitée (ISO)
+  goodsType: GoodsType;
+  message?: string;
+  status: LeadStatus;
+  handledBy?: string;
+  updatedAt: string;
+}
+
 // ── Utilisateurs de l'espace entreprise et audit ─────────────
 export type CompanyRole = "admin" | "operateur" | "comptabilite" | "lecture";
 
@@ -433,6 +464,7 @@ export interface AppData {
   invoices: Invoice[];
   users: CompanyUser[];
   audit: AuditEntry[];
+  leads: TransportLead[];
   notifications: AppNotification[];
   activity: ActivityItem[];
   monthly: MonthlyStat[];

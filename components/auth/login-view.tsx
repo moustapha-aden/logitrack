@@ -73,8 +73,7 @@ export function LoginView() {
             <Logo dark />
           </Link>
           <div className="max-w-lg">
-            <p className="text-sm font-medium text-brand-500">Plateforme transport & logistique · Djibouti</p>
-            <h1 className="mt-3 text-4xl leading-tight font-semibold tracking-tight">{SLOGAN}</h1>
+            <h1 className="text-4xl leading-tight font-semibold tracking-tight">{SLOGAN}</h1>
             <ul className="mt-8 space-y-3 text-sm text-white/80">
               {["Flottes, chauffeurs et transporteurs centralisés", "Suivi des missions du port jusqu'à la livraison", "Incidents et retards déclarés en temps réel"].map((t) => (
                 <li key={t} className="flex items-center gap-3">

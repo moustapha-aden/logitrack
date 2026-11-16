@@ -11,6 +11,7 @@ import {
   History,
   IdCard,
   LayoutDashboard,
+  Megaphone,
   Package,
   ScrollText,
   UserCog,
@@ -24,7 +25,7 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  badge?: "incidents" | "notifications" | "delayed" | "documents" | "invoices";
+  badge?: "incidents" | "notifications" | "delayed" | "documents" | "invoices" | "leads";
   /** Droit nécessaire pour voir l'entrée (espace entreprise). */
   perm?: Permission;
 }
@@ -41,6 +42,7 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       { href: "/entreprises", label: "Entreprises", icon: Building2 },
       { href: "/transporteurs", label: "Transporteurs", icon: Handshake },
+      { href: "/vitrine", label: "Annuaire public", icon: Megaphone, badge: "leads" },
       { href: "/camions", label: "Camions", icon: Truck },
       { href: "/chauffeurs", label: "Chauffeurs", icon: IdCard },
     ],
@@ -74,6 +76,7 @@ export const COMPANY_NAV: NavGroup[] = [
     items: [
       { href: "/entreprise/camions", label: "Mes camions", icon: Truck },
       { href: "/entreprise/chauffeurs", label: "Chauffeurs et transporteurs", icon: IdCard },
+      { href: "/entreprise/vitrine", label: "Annuaire public", icon: Megaphone, badge: "leads" },
     ],
   },
   {
