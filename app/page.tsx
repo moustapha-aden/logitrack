@@ -17,6 +17,7 @@ import {
 import { OPERATION_STEPS, SLOGAN } from "@/lib/constants";
 import { SafeImage } from "@/components/ui/media";
 import { Logo } from "@/components/layout/logo";
+import { SiteHeader } from "@/components/layout/site-header";
 
 const SPACES = [
   { title: "Administration", desc: "Supervisez entreprises, flottes, missions, incidents et performance de l'ensemble de la plateforme.", href: "/dashboard", icon: ShieldCheck, image: "/images/port-djibouti.jpg", cta: "Ouvrir l'administration" },
@@ -42,19 +43,7 @@ export default function LandingPage() {
   return (
     <div className="bg-white">
       {/* Navigation */}
-      <header className="absolute inset-x-0 top-0 z-20">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
-          <Logo dark />
-          <nav className="hidden items-center gap-8 text-sm text-white/80 md:flex">
-            <a href="#espaces" className="hover:text-white">Espaces</a>
-            <a href="#fonctionnalites" className="hover:text-white">Fonctionnalités</a>
-            <a href="#suivi" className="hover:text-white">Suivi</a>
-          </nav>
-          <Link href="/login" className="rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/20 backdrop-blur transition hover:bg-white/20">
-            Se connecter
-          </Link>
-        </div>
-      </header>
+      <SiteHeader overlay />
 
       {/* Héros */}
       <section className="relative flex min-h-svh items-center overflow-hidden bg-navy-900">
@@ -67,8 +56,8 @@ export default function LandingPage() {
             <Link href="/dashboard" className="inline-flex h-12 items-center gap-2 rounded-xl bg-brand-600 px-6 font-medium text-white shadow-lg shadow-brand-600/30 transition hover:bg-brand-700">
               Explorer la démonstration <ArrowRight className="size-4" />
             </Link>
-            <Link href="/chauffeur" className="inline-flex h-12 items-center gap-2 rounded-xl bg-white/10 px-6 font-medium text-white ring-1 ring-white/20 backdrop-blur transition hover:bg-white/20">
-              <Smartphone className="size-4" /> Application chauffeur
+            <Link href="/marketing" className="inline-flex h-12 items-center gap-2 rounded-xl bg-white px-6 font-medium text-navy-900 transition hover:bg-white/90">
+              <Truck className="size-4" /> Trouver un transporteur
             </Link>
           </div>
         </div>
