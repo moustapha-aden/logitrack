@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Eye, Handshake, Pencil, Plus, Trash2 } from "lucide-react";
 import { actions } from "@/lib/store";
-import { useData } from "@/lib/store/selectors";
+import { useData, usePermissions } from "@/lib/store/selectors";
+import { Can } from "@/components/auth/can";
 import { CARRIER_STATUS } from "@/lib/constants";
 import { includesText, isActiveMission } from "@/lib/utils";
 import type { Carrier, CarrierStatus } from "@/types";
@@ -22,6 +23,8 @@ import { useDetail } from "@/components/details/detail-provider";
 /** Liste des transporteurs partenaires (utilisable seule ou intégrée). */
 export function CarriersTable({ embedded }: { embedded?: boolean }) {
   const { carriers, missions, lookups, scope, all } = useData();
+  const { can } = usePermissions();
+  const busy = (id: string) => all.missions.some((m) => m.carrierId === id && m.step < 6) || all.requests.some((r) => r.status === "ouverte" && r.responses.some((x) => x.carrierId === id));
   const { open } = useDetail();
   const { toast } = useToast();
   const [q, setQ] = useState("");
@@ -83,8 +86,8 @@ export function CarriersTable({ embedded }: { embedded?: boolean }) {
         <ActionMenu
           items={[
             { label: "Voir la fiche", icon: Eye, onClick: () => open({ kind: "carrier", id: c.id }) },
-            { label: "Modifier", icon: Pencil, onClick: () => setForm({ open: true, carrier: c }) },
-            { label: "Supprimer", icon: Trash2, danger: true, onClick: () => setDel(c) },
+            can("fleet.edit") && { label: "Modifier", icon: Pencil, onClick: () => setForm({ open: true, carrier: c }) },
+            can("fleet.edit") && { label: busy(c.id) ? "Suppression impossible (missions en cours)" : "Supprimer", icon: Trash2, danger: true, disabled: busy(c.id), onClick: () => setDel(c) },
           ]}
         />
       ),
@@ -99,9 +102,9 @@ export function CarriersTable({ embedded }: { embedded?: boolean }) {
           {!scope && <FilterSelect label="Entreprise" value={company} onChange={setCompany} options={[{ value: "all", label: "Toutes les entreprises" }, ...owners.map((c) => ({ value: c.id, label: c.name }))]} />}
           <FilterSelect label="Statut" value={status} onChange={setStatus} options={[{ value: "all", label: "Tous les statuts" }, ...Object.entries(CARRIER_STATUS).map(([k, m]) => ({ value: k as CarrierStatus, label: m.label }))]} />
           {embedded && (
-            <Button icon={Plus} className="sm:ml-auto" onClick={() => setForm({ open: true })}>
+            <Can perm="fleet.edit"><Button icon={Plus} className="sm:ml-auto" onClick={() => setForm({ open: true })}>
               Ajouter un transporteur
-            </Button>
+            </Button></Can>
           )}
         </Toolbar>
         <DataTable columns={columns} rows={rows} onRowClick={(c) => open({ kind: "carrier", id: c.id })} emptyTitle="Aucun transporteur" />
@@ -132,9 +135,9 @@ export function CarriersView() {
         title="Transporteurs"
         description="Transporteurs partenaires et sous-traitants autorisés à opérer pour le compte des entreprises."
         actions={
-          <Button icon={Plus} onClick={() => setCreate(true)}>
+          <Can perm="fleet.edit"><Button icon={Plus} onClick={() => setCreate(true)}>
             Ajouter un transporteur
-          </Button>
+          </Button></Can>
         }
       />
       <CarriersTable />

@@ -40,8 +40,3 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# films (motion design) : rendus et fichiers temporaires
-films/*/renders/
-films/*/snapshots/
-films/*/.hyperframes/
-films/.env

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { CalendarOff, Eye, IdCard, LayoutGrid, List, Moon, Pencil, Phone, Plus, Star, UserCheck, Users } from "lucide-react";
-import { useData } from "@/lib/store/selectors";
+import { useData, usePermissions } from "@/lib/store/selectors";
+import { Can } from "@/components/auth/can";
 import { DRIVER_AVAILABILITY } from "@/lib/constants";
 import { cn, driverName, includesText } from "@/lib/utils";
 import type { Driver, DriverAvailability } from "@/types";
@@ -19,6 +20,7 @@ import { CarriersTable } from "./carriers-view";
 
 function DriversList({ onCreate }: { onCreate?: () => void }) {
   const { drivers, lookups, scope, all } = useData();
+  const { can } = usePermissions();
   const { open } = useDetail();
   const [q, setQ] = useState("");
   const [company, setCompany] = useState("all");
@@ -57,7 +59,7 @@ function DriversList({ onCreate }: { onCreate?: () => void }) {
         <ActionMenu
           items={[
             { label: "Voir la fiche", icon: Eye, onClick: () => open({ kind: "driver", id: d.id }) },
-            { label: "Modifier", icon: Pencil, onClick: () => setForm({ open: true, driver: d }) },
+            can("fleet.edit") && { label: "Modifier", icon: Pencil, onClick: () => setForm({ open: true, driver: d }) },
           ]}
         />
       ),
@@ -87,9 +89,9 @@ function DriversList({ onCreate }: { onCreate?: () => void }) {
               <LayoutGrid className="size-4" />
             </button>
             {onCreate && (
-              <Button icon={Plus} className="ml-2" onClick={onCreate}>
+              <Can perm="fleet.edit"><Button icon={Plus} className="ml-2" onClick={onCreate}>
                 Ajouter
-              </Button>
+              </Button></Can>
             )}
           </div>
         </Toolbar>
@@ -136,9 +138,9 @@ export function DriversView() {
         title="Chauffeurs"
         description="Effectif des chauffeurs, permis de conduire, affectations et disponibilités."
         actions={
-          <Button icon={Plus} onClick={() => setCreate(true)}>
+          <Can perm="fleet.edit"><Button icon={Plus} onClick={() => setCreate(true)}>
             Ajouter un chauffeur
-          </Button>
+          </Button></Can>
         }
       />
       <DriversList />

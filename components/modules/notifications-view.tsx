@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Bell, CheckCheck, Mail, MailOpen, Route, Trash2, Truck } from "lucide-react";
+import { AlertTriangle, Bell, CheckCheck, FileText, Handshake, Mail, MailOpen, Receipt, Route, Trash2, Truck } from "lucide-react";
 import { actions } from "@/lib/store";
 import { useData } from "@/lib/store/selectors";
 import { NOTIFICATION_KINDS } from "@/lib/constants";
@@ -15,7 +15,7 @@ import { EmptyState, PageHeader, Segmented } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
 import { useDetail } from "@/components/details/detail-provider";
 
-const icons: Record<NotificationKind, typeof Bell> = { mission: Route, incident: AlertTriangle, retard: AlertTriangle, flotte: Truck, systeme: Bell };
+const icons: Record<NotificationKind, typeof Bell> = { mission: Route, incident: AlertTriangle, retard: AlertTriangle, flotte: Truck, systeme: Bell, document: FileText, transport: Handshake, facture: Receipt };
 
 export function NotificationsView() {
   const { notifications, lookups, scope } = useData();
@@ -56,6 +56,9 @@ export function NotificationsView() {
             { value: "mission", label: "Missions" },
             { value: "incident", label: "Incidents" },
             { value: "retard", label: "Retards" },
+            { value: "document", label: "Documents" },
+            { value: "transport", label: "Transport" },
+            { value: "facture", label: "Factures" },
             { value: "flotte", label: "Flotte" },
             { value: "systeme", label: "Système" },
           ]}

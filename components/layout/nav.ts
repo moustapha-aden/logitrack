@@ -1,15 +1,20 @@
 import type { LucideIcon } from "lucide-react";
+import type { Permission } from "@/lib/permissions";
 import {
   Activity,
   AlertTriangle,
   BarChart3,
   Bell,
   Building2,
+  FileText,
   Handshake,
   History,
   IdCard,
   LayoutDashboard,
   Package,
+  ScrollText,
+  UserCog,
+  Receipt,
   Route,
   Settings,
   Truck,
@@ -19,7 +24,9 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  badge?: "incidents" | "notifications" | "delayed";
+  badge?: "incidents" | "notifications" | "delayed" | "documents" | "invoices";
+  /** Droit nécessaire pour voir l'entrée (espace entreprise). */
+  perm?: Permission;
 }
 
 export interface NavGroup {
@@ -43,6 +50,8 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       { href: "/missions", label: "Missions", icon: Route },
       { href: "/chargements", label: "Chargements", icon: Package },
+      { href: "/documents", label: "Documents", icon: FileText, badge: "documents" },
+      { href: "/factures", label: "Factures", icon: Receipt, badge: "invoices" },
       { href: "/operations", label: "Suivi des opérations", icon: Activity, badge: "delayed" },
       { href: "/incidents", label: "Incidents et retards", icon: AlertTriangle, badge: "incidents" },
     ],
@@ -52,6 +61,7 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       { href: "/rapports", label: "Rapports et statistiques", icon: BarChart3 },
       { href: "/notifications", label: "Notifications", icon: Bell, badge: "notifications" },
+      { href: "/audit", label: "Journal d'audit", icon: ScrollText },
       { href: "/parametres", label: "Paramètres", icon: Settings },
     ],
   },
@@ -71,6 +81,8 @@ export const COMPANY_NAV: NavGroup[] = [
     items: [
       { href: "/entreprise/missions", label: "Missions", icon: Route },
       { href: "/entreprise/chargements", label: "Chargements", icon: Package },
+      { href: "/entreprise/documents", label: "Documents", icon: FileText, badge: "documents" },
+      { href: "/entreprise/factures", label: "Factures", icon: Receipt, badge: "invoices", perm: "invoice.view" },
       { href: "/entreprise/suivi", label: "Suivi des opérations", icon: Activity, badge: "delayed" },
       { href: "/entreprise/incidents", label: "Incidents et retards", icon: AlertTriangle, badge: "incidents" },
     ],
@@ -81,6 +93,8 @@ export const COMPANY_NAV: NavGroup[] = [
       { href: "/entreprise/historique", label: "Historique", icon: History },
       { href: "/entreprise/statistiques", label: "Statistiques", icon: BarChart3 },
       { href: "/entreprise/notifications", label: "Notifications", icon: Bell, badge: "notifications" },
+      { href: "/entreprise/utilisateurs", label: "Utilisateurs et accès", icon: UserCog, perm: "users.manage" },
+      { href: "/entreprise/audit", label: "Journal d'audit", icon: ScrollText, perm: "audit.view" },
     ],
   },
 ];

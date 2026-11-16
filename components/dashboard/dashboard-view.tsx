@@ -11,14 +11,16 @@ import {
   Building2,
   CheckCircle2,
   Clock,
+  FileWarning,
   IdCard,
   Plus,
+  Receipt,
   Route,
   Truck,
   Wrench,
 } from "lucide-react";
-import { useData } from "@/lib/store/selectors";
-import { DEMO_NOW, INCIDENT_TYPES, MISSION_STATUS, SEVERITY, TRUCK_STATUS } from "@/lib/constants";
+import { useData, usePermissions } from "@/lib/store/selectors";
+import { DEMO_NOW, DOC_TYPES, INCIDENT_TYPES, MISSION_STATUS, SEVERITY, TRUCK_STATUS } from "@/lib/constants";
 import { dailySeries, monthlySeries, scopeShare } from "@/lib/data/analytics";
 import { placeName } from "@/lib/data/geo";
 import { cn, driverName, formatDate, formatDateTime, isActiveMission, missionStatus } from "@/lib/utils";
@@ -26,6 +28,9 @@ import type { TruckStatus } from "@/types";
 import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, StatCard } from "@/components/ui/card";
+import { isOverdue } from "@/lib/utils/documents";
+import { formatMoney, isOverdueInvoice, remaining, toRebill } from "@/lib/utils/invoices";
+import { isAssigned } from "@/lib/utils/transport";
 import { CompanyLogo, DriverAvatar, SafeImage } from "@/components/ui/media";
 import { Segmented } from "@/components/ui/misc";
 import { AreaTrend, Donut, SERIES } from "@/components/charts";
@@ -36,6 +41,7 @@ import { IncidentFormModal } from "@/components/forms/incident-form";
 
 export function DashboardView() {
   const data = useData();
+  const { can } = usePermissions();
   const { scope, all, missions, trucks, drivers, incidents, activity, lookups } = data;
   const { open } = useDetail();
   const router = useRouter();
@@ -61,12 +67,18 @@ export function DashboardView() {
 
   const lastUpdate = (m: (typeof missions)[number]) => m.history[m.history.length - 1]?.at ?? m.createdAt;
   const latest = [...missions].sort((a, b) => lastUpdate(b).localeCompare(lastUpdate(a))).slice(0, 6);
-  const unassigned = missions.filter((m) => m.step < 6 && (!m.truckId || !m.driverId));
+  const unassigned = missions.filter((m) => m.step < 6 && !isAssigned(m));
   const blockedTrucks = trucks.filter((t) => t.status === "immobilise" || t.status === "maintenance");
+  const overdueInvoices = can("invoice.view") ? data.invoices.filter(isOverdueInvoice) : [];
+  const unbilled = can("invoice.view") ? data.invoices.filter((i) => toRebill(i) && (lookups.mission(i.missionId)?.step ?? 0) >= 7) : [];
+  const docAlerts = data.documents.filter((d) => (isOverdue(d) || d.status === "a_corriger") && (lookups.mission(d.missionId)?.step ?? 7) < 7);
   const alerts = [
     ...openIncidents
       .filter((i) => i.severity === "critique" || i.severity === "elevee")
       .map((i) => ({ id: i.id, tone: i.severity === "critique" ? "red" : "orange", icon: AlertTriangle, title: `${INCIDENT_TYPES[i.type]} — ${lookups.mission(i.missionId)?.ref ?? ""}`, sub: i.location, onClick: () => open({ kind: "incident", id: i.id }) })),
+    ...docAlerts.map((d) => ({ id: d.id, tone: "red", icon: FileWarning, title: `${d.status === "a_corriger" ? "Pièce à corriger" : "Pièce en retard"} — ${lookups.mission(d.missionId)?.ref ?? ""}`, sub: DOC_TYPES[d.type].label, onClick: () => open({ kind: "mission", id: d.missionId }) })),
+    ...overdueInvoices.map((i) => ({ id: i.id, tone: "red", icon: Receipt, title: `Facture en retard — ${i.ref}`, sub: `${i.counterpartyName} · ${formatMoney(remaining(i), i.currency)}`, onClick: () => open({ kind: "mission", id: i.missionId }) })),
+    ...unbilled.map((i) => ({ id: i.id, tone: "orange", icon: Receipt, title: `Débours non refacturé — ${lookups.mission(i.missionId)?.ref ?? ""}`, sub: `${i.label} · ${formatMoney(i.amount, i.currency)}`, onClick: () => open({ kind: "mission", id: i.missionId }) })),
     ...delayed.map((m) => ({ id: m.id, tone: "orange", icon: Clock, title: `Retard — ${m.ref}`, sub: `${placeName(m.origin)} → ${placeName(m.destination)}`, onClick: () => open({ kind: "mission", id: m.id }) })),
     ...unassigned.map((m) => ({ id: `u-${m.id}`, tone: "blue", icon: Route, title: `Mission à affecter — ${m.ref}`, sub: `Départ ${formatDateTime(m.plannedDeparture)}`, onClick: () => open({ kind: "mission", id: m.id }) })),
     ...blockedTrucks.map((t) => ({ id: t.id, tone: t.status === "immobilise" ? "red" : "neutral", icon: Wrench, title: `${t.plate} ${TRUCK_STATUS[t.status].label.toLowerCase()}`, sub: `${t.brand} ${t.model}`, onClick: () => open({ kind: "truck", id: t.id }) })),
@@ -92,12 +104,16 @@ export function DashboardView() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button icon={Plus} onClick={() => setCreateMission(true)}>
-              Créer une mission
-            </Button>
-            <Button variant="secondary" icon={AlertTriangle} onClick={() => setDeclare(true)} className="border-white/20 bg-white/10 text-white hover:bg-white/20">
-              Déclarer un incident
-            </Button>
+            {can("mission.edit") && (
+              <Button icon={Plus} onClick={() => setCreateMission(true)}>
+                Créer une mission
+              </Button>
+            )}
+            {can("incident.report") && (
+              <Button variant="secondary" icon={AlertTriangle} onClick={() => setDeclare(true)} className="border-white/20 bg-white/10 text-white hover:bg-white/20">
+                Déclarer un incident
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -236,7 +252,7 @@ export function DashboardView() {
               ))}
             </div>
           </div>
-          <div className="scroll-thin flex gap-3 overflow-x-auto px-5 pt-5 pb-5">
+          <div className="grid grid-cols-2 gap-3 px-5 pt-5 pb-5 sm:grid-cols-4">
             {trucks
               .filter((t) => t.status === "en_mission")
               .concat(trucks.filter((t) => t.status !== "en_mission"))
@@ -244,9 +260,9 @@ export function DashboardView() {
               .map((t) => {
                 const owner = lookups.company(t.companyId);
                 return (
-                  <button key={t.id} onClick={() => open({ kind: "truck", id: t.id })} className="group w-52 shrink-0 overflow-hidden rounded-xl border border-slate-200 text-left transition hover:-translate-y-0.5 hover:shadow-pop">
+                  <button key={t.id} onClick={() => open({ kind: "truck", id: t.id })} className="group min-w-0 overflow-hidden rounded-xl border border-slate-200 text-left transition hover:-translate-y-0.5 hover:shadow-pop">
                     <div className="relative">
-                      <SafeImage src={t.image} alt={`${t.brand} ${t.model}`} className="h-28 transition duration-300 group-hover:scale-[1.03]" sizes="208px" />
+                      <SafeImage src={t.image} alt={`${t.brand} ${t.model}`} className="aspect-[16/10] transition duration-300 group-hover:scale-[1.03]" sizes="(max-width: 640px) 50vw, 240px" />
                       <span className="absolute top-2 left-2">
                         <StatusBadge map={TRUCK_STATUS} value={t.status} className="bg-white/95" />
                       </span>
@@ -266,7 +282,7 @@ export function DashboardView() {
         <Card>
           <CardHeader title="Activité récente" subtitle="Dernières actions sur la plateforme" />
           <ol className="relative space-y-4 px-5 pb-5">
-            {activity.slice(0, 7).map((a) => (
+            {activity.slice(0, 5).map((a) => (
               <li key={a.id} className="relative flex gap-3">
                 <span className={cn("mt-1.5 size-2 shrink-0 rounded-full ring-4", a.tone === "success" ? "bg-success-600 ring-success-50" : a.tone === "warning" ? "bg-amber-500 ring-amber-50" : a.tone === "danger" ? "bg-red-500 ring-red-50" : "bg-brand-600 ring-brand-50")} />
                 <button onClick={() => a.link && open(a.link)} className="min-w-0 text-left">

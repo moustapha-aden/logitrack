@@ -2,9 +2,9 @@
 
 import { useRef, useState } from "react";
 import { AlertTriangle, ArrowRight, ChevronRight, Eye, MapPinned, Radio, RotateCcw } from "lucide-react";
-import { actions, useAppData } from "@/lib/store";
-import { useData } from "@/lib/store/selectors";
-import { MISSION_STATUS, OPERATION_STEPS } from "@/lib/constants";
+import { actions } from "@/lib/store";
+import { useData, usePermissions } from "@/lib/store/selectors";
+import { DOC_TYPES, MISSION_STATUS, OPERATION_STEPS } from "@/lib/constants";
 import { placeName } from "@/lib/data/geo";
 import { cn, driverName, formatDateTime, includesText, missionStatus } from "@/lib/utils";
 import type { Mission, OperationStep } from "@/types";
@@ -19,13 +19,14 @@ import { DjiboutiMap } from "@/components/maps";
 import { AssignModal } from "@/components/forms/assign-form";
 import { IncidentFormModal } from "@/components/forms/incident-form";
 import { useDetail } from "@/components/details/detail-provider";
+import { blockingDocs } from "@/lib/utils/documents";
+import { isAssigned } from "@/lib/utils/transport";
 import { OperationTimeline, StepProgress } from "@/components/operations/timeline";
 
 type Filter = "actives" | "planifiees" | "terminees" | "toutes";
 
 export function OperationsView() {
-  const { missions, trucks, lookups, scope } = useData();
-  const raw = useAppData();
+  const { missions, trucks, lookups, all } = useData();
   const { open } = useDetail();
   const { toast } = useToast();
   const [filter, setFilter] = useState<Filter>("actives");
@@ -52,14 +53,21 @@ export function OperationsView() {
     .filter((m) => includesText([m.ref, placeName(m.origin), placeName(m.destination), lookups.truck(m.truckId)?.plate, driverName(lookups.driver(m.driverId))], q))
     .sort((a, b) => Number(b.delayed) - Number(a.delayed) || b.step - a.step);
   const selected = lookups.mission(selectedId) ?? list[0];
-  const actor = scope ? `Exploitation ${lookups.company(scope)?.initials ?? ""}` : raw.settings.userName;
+  const perms = usePermissions();
+  const actor = perms.actor;
 
   const lastUpdate = (m: Mission) => m.history[m.history.length - 1]?.at ?? m.createdAt;
 
   const setStep = (m: Mission, step: OperationStep) => {
-    if (step >= 2 && (!m.truckId || !m.driverId)) {
+    if (step >= 2 && !isAssigned(m)) {
       toast("Affectation requise", { message: "Affectez un camion et un chauffeur avant de démarrer.", tone: "warning" });
       setAssign(m);
+      return;
+    }
+    const blocked = blockingDocs(all.documents, m.id, m.step, step);
+    if (blocked.length > 0) {
+      toast("Pièces manquantes", { message: `${blocked.map((d) => DOC_TYPES[d.type].label).join(", ")} — ouvrez la fiche pour régulariser ou forcer le passage.`, tone: "warning" });
+      open({ kind: "mission", id: m.id });
       return;
     }
     actions.setMissionStep(m.id, step, actor);
@@ -174,6 +182,7 @@ export function OperationsView() {
                   <StepProgress step={selected.step} delayed={selected.delayed} />
                 </div>
               </div>
+              {perms.can("mission.step") && (
               <div className="space-y-2 border-b border-slate-100 p-4">
                 {selected.step < 7 ? (
                   <Button variant={selected.step + 1 >= 6 ? "success" : "primary"} iconRight={ChevronRight} className="w-full" onClick={() => setStep(selected, (selected.step + 1) as OperationStep)}>
@@ -191,6 +200,7 @@ export function OperationsView() {
                   </Button>
                 </div>
               </div>
+              )}
               <div className="scroll-thin max-h-[520px] overflow-y-auto p-5">
                 <OperationTimeline mission={selected} />
               </div>

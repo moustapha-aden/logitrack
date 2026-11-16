@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, Download, Gauge, Printer, Route } from "lucide-react";
-import { useData } from "@/lib/store/selectors";
+import { useData, usePermissions } from "@/lib/store/selectors";
+import { actions } from "@/lib/store";
 import { INCIDENT_TYPES } from "@/lib/constants";
 import { monthlySeries } from "@/lib/data/analytics";
 import { formatDjf, formatNumber } from "@/lib/utils";
@@ -18,6 +19,7 @@ type Range = "3" | "6" | "12";
 
 export function ReportsView() {
   const { all, scope, missions, incidents, trucks, lookups } = useData();
+  const { can } = usePermissions();
   const { toast } = useToast();
   const [range, setRange] = useState<Range>("12");
   const [company, setCompany] = useState(scope ?? "all");
@@ -91,6 +93,7 @@ export function ReportsView() {
     a.download = `logitrack-rapport-${range}-mois.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    actions.logAudit("export", `a exporté le rapport d'activité (CSV, ${series.length} mois)`, scope ?? undefined);
     toast("Rapport exporté", { message: `${series.length} mois · format CSV` });
   };
 
@@ -105,9 +108,11 @@ export function ReportsView() {
             <Button variant="secondary" icon={Printer} onClick={() => window.print()}>
               Imprimer
             </Button>
-            <Button icon={Download} onClick={exportCsv}>
-              Exporter CSV
-            </Button>
+            {can("export") && (
+              <Button icon={Download} onClick={exportCsv}>
+                Exporter CSV
+              </Button>
+            )}
           </>
         }
       />
@@ -176,7 +181,7 @@ export function ReportsView() {
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3 lg:gap-6">
         <Card className="lg:col-span-2">
-          <CardHeader title="Performance des entreprises" subtitle="Calculée en temps réel sur les missions enregistrées dans la plateforme" />
+          <CardHeader title={scope ? "Performance de votre entreprise" : "Performance des entreprises"} subtitle="Calculée en temps réel sur les missions enregistrées dans la plateforme" />
           <div className="scroll-thin overflow-x-auto px-5 pb-5">
             <table className="w-full min-w-[680px] text-sm">
               <thead>
@@ -187,11 +192,11 @@ export function ReportsView() {
                   <th className="py-2 pl-4 text-right">Retards</th>
                   <th className="py-2 pl-4 text-right">Flotte</th>
                   <th className="w-44 py-2 pl-6">Ponctualité</th>
-                  <th className="py-2 pl-4 text-right">Valeur des missions</th>
+                  {can("price.view") && <th className="py-2 pl-4 text-right">Valeur des missions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {perf.map(({ c, volume, done, late, rate, revenue, fleet }) => (
+                {perf.filter(({ c }) => !scope || c.id === scope).map(({ c, volume, done, late, rate, revenue, fleet }) => (
                   <tr key={c.id} className={effective !== "all" && effective !== c.id ? "opacity-40" : ""}>
                     <td className="py-3">
                       <span className="flex items-center gap-2.5">
@@ -209,7 +214,7 @@ export function ReportsView() {
                         <span className="w-14 shrink-0 text-right text-xs font-semibold whitespace-nowrap tabular-nums">{rate.toLocaleString("fr-FR")} %</span>
                       </div>
                     </td>
-                    <td className="py-3 pl-4 text-right text-xs whitespace-nowrap tabular-nums">{formatDjf(revenue)}</td>
+                    {can("price.view") && <td className="py-3 pl-4 text-right text-xs whitespace-nowrap tabular-nums">{formatDjf(revenue)}</td>}
                   </tr>
                 ))}
               </tbody>

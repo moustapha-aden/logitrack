@@ -3,9 +3,10 @@
 import { useLayoutEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Building2, CheckCircle2, Eye, EyeOff, Lock, Mail, ShieldCheck, Smartphone } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, Eye, EyeOff, Handshake, Lock, Mail, ShieldCheck, Smartphone } from "lucide-react";
 import { actions, useAppData } from "@/lib/store";
 import { SLOGAN } from "@/lib/constants";
+import { ROLES as COMPANY_ROLES } from "@/lib/permissions";
 import { cn, driverName } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/form";
@@ -13,11 +14,12 @@ import { SafeImage } from "@/components/ui/media";
 import { useToast } from "@/components/ui/toast";
 import { Logo } from "@/components/layout/logo";
 
-type Role = "admin" | "company" | "driver";
+type Role = "admin" | "company" | "carrier" | "driver";
 
 const ROLES: { id: Role; label: string; desc: string; icon: typeof ShieldCheck; email: string; href: string }[] = [
   { id: "admin", label: "Administrateur", desc: "Supervision de la plateforme", icon: ShieldCheck, email: "admin@logitrack.dj", href: "/dashboard" },
   { id: "company", label: "Entreprise", desc: "Transporteur ou transitaire", icon: Building2, email: "exploitation@hornfreight.dj", href: "/entreprise" },
+  { id: "carrier", label: "Transporteur", desc: "Partenaire, accès par lien", icon: Handshake, email: "partenaire@logitrack.dj", href: "/transporteur" },
   { id: "driver", label: "Chauffeur", desc: "Application mobile terrain", icon: Smartphone, email: "chauffeur@logitrack.dj", href: "/chauffeur" },
 ];
 
@@ -41,10 +43,14 @@ export function LoginView() {
 
   const current = ROLES.find((r) => r.id === role)!;
   const companies = data.companies.filter((c) => c.type !== "client" && c.status === "actif");
+  const team = data.users.filter((u) => u.companyId === data.prefs.companyId);
+  const companyUser = team.find((u) => u.id === data.prefs.userId) ?? team.find((u) => u.role === "admin");
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    // espace entreprise : la connexion de l'utilisateur choisi est inscrite au journal d'audit
+    if (role === "company" && companyUser) actions.login(companyUser.id);
     try {
       window.localStorage.setItem("logitrack:session", JSON.stringify({ role, at: new Date().toISOString() }));
     } catch {
@@ -90,7 +96,7 @@ export function LoginView() {
           <h2 className="mt-8 text-2xl font-semibold tracking-tight lg:mt-0">Connexion à votre espace</h2>
           <p className="mt-1 text-sm text-slate-500">Prototype de démonstration — aucun mot de passe réel n&apos;est requis.</p>
 
-          <div className="mt-6 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Profil">
+          <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Profil">
             {ROLES.map((r) => (
               <button
                 key={r.id}
@@ -130,6 +136,30 @@ export function LoginView() {
                       {c.name}
                     </option>
                   ))}
+                </Select>
+              </Field>
+            )}
+            {role === "company" && team.length > 0 && (
+              <Field label="Utilisateur" hint={companyUser ? COMPANY_ROLES[companyUser.role].desc : undefined}>
+                <Select value={companyUser?.id} onChange={(e) => actions.setPrefs({ userId: e.target.value })}>
+                  {team.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} — {COMPANY_ROLES[u.role].label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {role === "carrier" && (
+              <Field label="Transporteur à simuler">
+                <Select value={data.prefs.carrierId} onChange={(e) => actions.setPrefs({ carrierId: e.target.value })}>
+                  {data.carriers
+                    .filter((c) => c.status === "actif")
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
                 </Select>
               </Field>
             )}

@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Inbox, Search, X } from "lucide-react";
+import { Inbox, Lock, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function PageHeader({ title, description, actions, eyebrow }: { title: string; description?: string; actions?: ReactNode; eyebrow?: string }) {
@@ -131,5 +131,16 @@ export function LinkButton({ children, onClick, className }: { children: ReactNo
     >
       {children}
     </button>
+  );
+}
+
+/** Page non autorisée pour le rôle courant. */
+export function AccessDenied({ message = "Votre rôle ne donne pas accès à cette page. Contactez l'administrateur de votre entreprise." }: { message?: string }) {
+  return (
+    <div className="mx-auto mt-10 max-w-md rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-card">
+      <Lock className="mx-auto size-10 text-slate-300" />
+      <h1 className="mt-4 text-lg font-semibold">Accès non autorisé</h1>
+      <p className="mt-1 text-sm text-slate-500">{message}</p>
+    </div>
   );
 }

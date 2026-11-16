@@ -3,18 +3,31 @@
 // Toute ressemblance avec des entreprises ou personnes existantes
 // serait fortuite.
 // ─────────────────────────────────────────────────────────────
-import { DEMO_NOW, OPERATION_STEPS } from "@/lib/constants";
+import { DEMO_NOW, DOC_TYPES, OPERATION_STEPS } from "@/lib/constants";
+import { checklistFor, newDocument, operationKind } from "@/lib/utils/documents";
+import { placeName } from "@/lib/data/geo";
+import { auditActionOf } from "@/lib/permissions";
 import type {
   ActivityItem,
   AppData,
   AppNotification,
   Carrier,
   Company,
+  DocStatus,
+  DocType,
   Driver,
   GoodsType,
   Incident,
+  Invoice,
   Load,
   Mission,
+  MissionDocument,
+  MissionMessage,
+  TransportRequest,
+  CarrierAssignment,
+  AuditEntry,
+  CompanyUser,
+  ClientShare,
   MonthlyStat,
   OperationStep,
   StepEvent,
@@ -22,7 +35,7 @@ import type {
   TruckType,
 } from "@/types";
 
-export const DATA_VERSION = 5;
+export const DATA_VERSION = 12;
 
 const NOW = new Date(DEMO_NOW).getTime();
 const H = 3600 * 1000;
@@ -162,24 +175,24 @@ const missionSeeds: MissionSeed[] = [
   [10, "cmp-hfl", "cmp-ecd", "t04", "d04", null, "doraleh", "ali-sabieh", "hydrocarbures", "Essence sans plomb — 32 000 L", "2026-11-06T06:00:00+03:00", 6, false, 480000],
   [11, "cmp-tcs", "cmp-mae", "t13", "d11", "car-04", "port-djibouti", "dire-dawa", "vrac", "Farine de blé — 36 t en sacs", "2026-11-05T05:00:00+03:00", 6, false, 1400000],
   [12, "cmp-bts", "cmp-bdm", "t16", "d14", null, "port-djibouti", "pk12", "materiaux", "Fers à béton HA12 — 34 t", "2026-11-07T08:00:00+03:00", 6, false, 150000],
-  [13, "cmp-hfl", "cmp-eda", "t02", "d02", "car-02", "doraleh", "galafi", "conteneurs", "1 × 40' matériel agricole (motoculteurs)", "2026-11-08T05:00:00+03:00", 4, false, 1250000],
+  [13, "cmp-hfl", "cmp-eda", "t02", "d02", null, "doraleh", "galafi", "conteneurs", "1 × 40' matériel agricole (motoculteurs)", "2026-11-08T05:00:00+03:00", 4, false, 1250000],
   [14, "cmp-hfl", "cmp-mae", "t05", "d05", null, "port-djibouti", "dire-dawa", "conteneurs", "2 × 20' huile alimentaire en bidons", "2026-11-07T22:00:00+03:00", 4, true, 1480000],
   [15, "cmp-rsh", "cmp-ecd", "t07", "d06", null, "doraleh", "dikhil", "equipements", "Transformateurs électriques 630 kVA — 3 unités", "2026-11-08T06:30:00+03:00", 4, false, 560000],
   [16, "cmp-rsh", "cmp-bdm", "t09", "d08", null, "port-djibouti", "damerjog", "materiaux", "Charpente métallique — 14 éléments", "2026-11-08T07:50:00+03:00", 3, false, 190000],
-  [17, "cmp-tcs", "cmp-fmc", "t14", "d12", null, "pk12", "ali-sabieh", "denrees", "Eau minérale — 1 200 packs", "2026-11-08T04:20:00+03:00", 5, true, 380000],
-  [18, "cmp-bts", "cmp-eda", "t17", "d15", "car-05", "port-djibouti", "dire-dawa", "frigorifique", "Médicaments sous température dirigée (+2/+8 °C)", "2026-11-08T04:00:00+03:00", 4, true, 1650000],
+  [17, "cmp-tcs", "cmp-fmc", "t14", "d12", null, "pk12", "ali-sabieh", "denrees", "Eau minérale — 1 200 packs", "2026-11-08T02:20:00+03:00", 5, true, 380000],
+  [18, "cmp-bts", "cmp-eda", "t17", "d15", null, "port-djibouti", "dire-dawa", "frigorifique", "Médicaments sous température dirigée (+2/+8 °C)", "2026-11-08T04:00:00+03:00", 4, true, 1650000],
   [19, "cmp-dle", "cmp-ecd", "t20", "d18", null, "doraleh", "tadjourah", "hydrocarbures", "Gasoil — 32 000 L pour centrale électrique", "2026-11-08T06:00:00+03:00", 4, false, 640000],
   [20, "cmp-hts", "cmp-mae", "t23", "d20", null, "doraleh", "galafi", "conteneurs", "1 × 40' sucre cristallisé", "2026-11-08T03:30:00+03:00", 4, true, 1230000],
   [21, "cmp-dle", "cmp-bdm", "t19", "d17", null, "port-djibouti", "arta", "materiaux", "Carreaux et sanitaires — 22 palettes", "2026-11-08T09:30:00+03:00", 2, false, 260000],
   [22, "cmp-hfl", "cmp-mae", "t01", "d01", null, "port-djibouti", "ali-sabieh", "vrac", "Blé dur en vrac — 36 t", "2026-11-08T13:00:00+03:00", 1, false, 520000],
-  [23, "cmp-hfl", "cmp-bdm", "t03", "d03", null, "doraleh", "pk12", "materiaux", "Tôles ondulées galvanisées — 28 t", "2026-11-09T07:00:00+03:00", 0, false, 160000],
-  [24, "cmp-rsh", "cmp-ecd", "t08", "d07", null, "doraleh", "dikhil", "hydrocarbures", "Kérosène — 28 000 L", "2026-11-09T05:00:00+03:00", 1, false, 590000],
+  [23, "cmp-hfl", "cmp-bdm", null, null, null, "doraleh", "pk12", "materiaux", "Tôles ondulées galvanisées — 28 t", "2026-11-09T07:00:00+03:00", 0, false, 160000],
+  [24, "cmp-rsh", "cmp-ecd", null, null, "car-03", "doraleh", "dikhil", "hydrocarbures", "Kérosène — 28 000 L", "2026-11-09T05:00:00+03:00", 1, false, 590000],
   [25, "cmp-tcs", "cmp-fmc", "t12", "d10", null, "port-djibouti", "djibouti-ville", "frigorifique", "Volailles congelées — 300 colis à -18 °C", "2026-11-09T06:30:00+03:00", 0, false, 140000],
   [26, "cmp-bts", "cmp-eda", "t15", "d13", null, "doraleh", "dire-dawa", "conteneurs", "1 × 40' pneumatiques poids lourds", "2026-11-10T05:00:00+03:00", 0, false, 1380000],
   [27, "cmp-hts", "cmp-bdm", "t22", "d19", null, "port-djibouti", "damerjog", "equipements", "Pelle hydraulique 20 t sur porte-engin", "2026-11-10T08:00:00+03:00", 0, false, 230000],
   [28, "cmp-dle", "cmp-fmc", "t18", "d16", null, "pk12", "tadjourah", "frigorifique", "Poissons et produits de la mer — 9 t", "2026-11-09T05:30:00+03:00", 1, false, 470000],
   [29, "cmp-hfl", "cmp-ecd", "t04", "d04", null, "doraleh", "galafi", "hydrocarbures", "Gasoil — 30 000 L", "2026-11-11T05:00:00+03:00", 0, false, 1190000],
-  [30, "cmp-rsh", "cmp-eda", null, null, "car-03", "port-djibouti", "dire-dawa", "conteneurs", "2 × 20' café vert — chauffeur et camion à affecter", "2026-11-12T05:00:00+03:00", 0, false, 1420000],
+  [30, "cmp-rsh", "cmp-eda", null, null, null, "port-djibouti", "dire-dawa", "conteneurs", "2 × 20' café vert en sacs de jute", "2026-11-12T05:00:00+03:00", 0, false, 1420000],
 ];
 
 const TRIP_HOURS: Record<string, number> = {
@@ -221,8 +234,50 @@ function buildHistory(s: MissionSeed, driverLabel: string, companyShort: string)
   return events;
 }
 
+/** Missions exécutées par un transporteur partenaire (camion et chauffeur fournis par lui). */
+const CARRIER_ASSIGNMENTS: Record<number, CarrierAssignment> = {
+  1: { plate: "DJ-512-AT", driverName: "Hassan Djama Ali", driverPhone: "+253 77 81 12 40" },
+  4: { plate: "DJ-733-GF", driverName: "Omar Ismaël Doualeh", driverPhone: "+253 77 64 22 18" },
+  6: { plate: "DJ-284-AR", driverName: "Abdo Houmed Saleh", driverPhone: "+253 77 59 30 71" },
+  8: { plate: "DJ-418-GR", driverName: "Abdillahi Moussa Robleh", driverPhone: "+253 77 83 41 26" },
+  11: { plate: "DJ-609-LA", driverName: "Youssouf Kadar Elmi", driverPhone: "+253 77 47 85 02" },
+  24: { plate: "DJ-418-GR", driverName: "Abdillahi Moussa Robleh", driverPhone: "+253 77 83 41 26" },
+};
+
+/** Liens de suivi client déjà partagés (démonstration). */
+const CLIENT_SHARES: Record<number, ClientShare> = {
+  14: {
+    token: "hf1054k7q2xd",
+    createdAt: iso("2026-11-07T18:00:00+03:00"),
+    expiresAt: iso("2026-12-10T00:00:00+03:00"),
+    revoked: false,
+    showPlate: true,
+    showDriver: false,
+    publicNote: "Votre envoi est en attente au poste frontière de Guelilé pour un contrôle documentaire. Nous suivons le dossier et vous tiendrons informé de la nouvelle heure d'arrivée.",
+    publicNoteAt: iso("2026-11-08T08:00:00+03:00"),
+    notifyEmail: "achats@minoterie-ae.dj",
+    notifySteps: [4, 6],
+    sentEmails: [{ at: iso("2026-11-08T00:10:00+03:00"), step: 4, to: "achats@minoterie-ae.dj" }],
+  },
+  13: {
+    token: "hf1053m2v8pa",
+    createdAt: iso("2026-11-07T10:00:00+03:00"),
+    expiresAt: iso("2026-12-10T00:00:00+03:00"),
+    revoked: false,
+    showPlate: false,
+    showDriver: false,
+    notifyEmail: "logistique@ethiodjib-agro.com",
+    notifySteps: [2, 4, 6],
+    sentEmails: [
+      { at: iso("2026-11-08T05:00:00+03:00"), step: 2, to: "logistique@ethiodjib-agro.com" },
+      { at: iso("2026-11-08T07:00:00+03:00"), step: 4, to: "logistique@ethiodjib-agro.com" },
+    ],
+  },
+};
+
 const missionsBase: Mission[] = missionSeeds.map((s) => {
   const [n, companyId, clientId, truckId, driverId, carrierId, origin, destination, goodsType, description, departure, step, delayed, priceDjf] = s;
+  const assignment = CARRIER_ASSIGNMENTS[n];
   const d = driversBase.find((x) => x.id === driverId);
   const c = companies.find((x) => x.id === companyId);
   const dep = new Date(departure).getTime();
@@ -231,8 +286,9 @@ const missionsBase: Mission[] = missionSeeds.map((s) => {
     ref: `MS-26-${String(1040 + n).padStart(4, "0")}`,
     companyId,
     clientId,
-    truckId,
-    driverId,
+    // mission exécutée par un transporteur : pas de camion ni de chauffeur de la flotte propre
+    truckId: assignment ? null : truckId,
+    driverId: assignment ? null : driverId,
     carrierId,
     origin,
     destination,
@@ -243,8 +299,10 @@ const missionsBase: Mission[] = missionSeeds.map((s) => {
     step,
     delayed,
     priceDjf,
-    history: buildHistory(s, d ? `${d.firstName} ${d.lastName}` : "Chauffeur", c?.initials ?? ""),
+    history: buildHistory(s, assignment ? assignment.driverName : d ? `${d.firstName} ${d.lastName}` : "Chauffeur", c?.initials ?? ""),
     createdAt: new Date(createdAtFor(n, dep)).toISOString(),
+    carrierAssignment: CARRIER_ASSIGNMENTS[n] ?? null,
+    clientShare: CLIENT_SHARES[n] ?? null,
   };
 });
 
@@ -306,16 +364,271 @@ const loadsBase: Load[] = missionsBase.map((m, i) => {
   };
 });
 
+// ── Documents de transit (checklist par mission) ─────────────
+/** Statut cohérent avec l'avancement : une pièce bloquante est validée dès que l'étape est franchie. */
+function seedDocStatus(type: DocType, step: OperationStep, k: number): DocStatus {
+  const block = DOC_TYPES[type].blocksStep;
+  if (type === "pod") return step >= 7 ? "valide" : step === 6 ? "recu" : "attendu";
+  if (type === "interchange_eir") return step >= 3 ? "valide" : "attendu";
+  if (block !== null) {
+    if (step >= block) return "valide";
+    if (block === 2) return step === 1 ? "valide" : k % 3 === 0 ? "recu" : "attendu";
+    return step >= 2 ? "verifie" : step === 1 && k % 2 === 0 ? "recu" : "attendu";
+  }
+  if (step >= 2) return "valide";
+  if (step === 1) return k % 4 === 0 ? "recu" : "valide";
+  return (["attendu", "recu", "valide"] as const)[k % 3];
+}
+
+/** Cas de démonstration : pièces manquantes, en retard ou à corriger. */
+const DOC_OVERRIDES: Record<string, Partial<Record<DocType, Partial<MissionDocument>>>> = {
+  m24: {
+    bon_a_enlever: { status: "attendu", dueAt: iso("2026-11-08T08:00:00+03:00") },
+    autorisation_md: { status: "a_corriger", note: "Fiche de données de sécurité du kérosène manquante — merci de la joindre." },
+  },
+  m26: { facture_commerciale: { status: "a_corriger", note: "Le nombre de colis ne correspond pas à la liste de colisage (écart de 2)." } },
+  m30: { connaissement: { status: "attendu", dueAt: iso("2026-11-07T17:00:00+03:00") } },
+  m22: { bon_sortie_port: { status: "verifie" } },
+  m16: { bon_sortie_port: { status: "recu" } },
+  // pièces que le transitaire a choisi de montrer au client sur le lien de suivi
+  m14: { bon_a_enlever: { sharedWith: ["client"] }, bon_sortie_port: { sharedWith: ["transporteur", "client"] } },
+  m13: { bon_sortie_port: { sharedWith: ["transporteur", "client"] } },
+};
+
+function uploaderLabel(type: DocType, m: Mission): string {
+  const party = DOC_TYPES[type].responsible;
+  if (party === "client") return companies.find((c) => c.id === m.clientId)?.name ?? "Client";
+  if (party === "chauffeur") {
+    const d = driversBase.find((x) => x.id === m.driverId);
+    return d ? `${d.firstName} ${d.lastName}` : "Chauffeur";
+  }
+  if (party === "transporteur") return carriers.find((c) => c.id === m.carrierId)?.name ?? `Exploitation ${companies.find((c) => c.id === m.companyId)?.initials ?? ""}`;
+  return `Exploitation ${companies.find((c) => c.id === m.companyId)?.initials ?? ""}`;
+}
+
+const documentsBase: MissionDocument[] = missionsBase.flatMap((m, mi) => {
+  const load = loadsBase.find((l) => l.missionId === m.id);
+  const created = Date.parse(m.createdAt);
+  return checklistFor(m, load?.hazardous ?? false).map((type, k) => {
+    const base = newDocument(`doc-${m.id}-${type}`, m.id, type, m, m.createdAt);
+    const status = seedDocStatus(type, m.step, mi + k);
+    const doc: MissionDocument = { ...base, status, ...DOC_OVERRIDES[m.id]?.[type] };
+    if (doc.status !== "attendu") {
+      const stepAt = m.history.find((h) => h.step === (DOC_TYPES[type].blocksStep ?? 1))?.at;
+      const ceiling = stepAt ? Date.parse(stepAt) - 30 * 60 * 1000 : NOW - 2 * H;
+      const at = new Date(Math.min(created + (2 + k * 3) * H, ceiling, NOW - 30 * 60 * 1000)).toISOString();
+      const ext = type === "pod" ? "jpg" : "pdf";
+      doc.versions = [{ at, by: uploaderLabel(type, m), fileName: `${DOC_TYPES[type].short.replace(/[^A-Za-z0-9]+/g, "_")}_${m.ref}.${ext}`, sizeKb: 180 + ((mi * 53 + k * 97) % 900) }];
+      doc.updatedAt = at;
+    }
+    return doc;
+  });
+});
+
+// ── Demandes de transport et échanges ────────────────────────
+const MIN = 60 * 1000;
+/** Historique : missions terminées confiées à un partenaire (alimente les indicateurs). */
+const pastRequests: TransportRequest[] = missionsBase
+  .filter((m) => m.carrierId && m.step >= 6)
+  .map((m, i) => {
+    const created = Date.parse(m.createdAt);
+    const answered = created + (20 + ((i * 23) % 70)) * MIN;
+    return {
+      id: `rq-${m.id}`,
+      ref: `DT-26-${String(80 + i).padStart(4, "0")}`,
+      missionId: m.id,
+      companyId: m.companyId,
+      createdAt: new Date(created).toISOString(),
+      createdBy: `Exploitation ${companies.find((c) => c.id === m.companyId)?.initials ?? ""}`,
+      deadline: new Date(created + 4 * H).toISOString(),
+      status: "confirmee",
+      responses: [{ carrierId: m.carrierId!, status: "acceptee", seenAt: new Date(created + 8 * MIN).toISOString(), answeredAt: new Date(answered).toISOString(), proposal: m.carrierAssignment ?? undefined }],
+      confirmedCarrierId: m.carrierId,
+      closedAt: new Date(answered + 15 * MIN).toISOString(),
+    };
+  });
+
+export const requests: TransportRequest[] = [
+  ...pastRequests,
+  {
+    id: "rq-101",
+    ref: "DT-26-0101",
+    missionId: "m24",
+    companyId: "cmp-rsh",
+    createdAt: iso("2026-11-07T15:00:00+03:00"),
+    createdBy: "Exploitation RS",
+    deadline: iso("2026-11-07T18:00:00+03:00"),
+    instructions: "Citerne ADR obligatoire. Enlèvement au terminal de Doraleh, quai pétrolier.",
+    status: "confirmee",
+    responses: [{ carrierId: "car-03", status: "acceptee", seenAt: iso("2026-11-07T15:12:00+03:00"), answeredAt: iso("2026-11-07T15:40:00+03:00"), proposal: CARRIER_ASSIGNMENTS[24] }],
+    confirmedCarrierId: "car-03",
+    closedAt: iso("2026-11-07T15:55:00+03:00"),
+  },
+  {
+    id: "rq-102",
+    ref: "DT-26-0102",
+    missionId: "m30",
+    companyId: "cmp-rsh",
+    createdAt: iso("2026-11-08T09:10:00+03:00"),
+    createdBy: "Exploitation RS",
+    deadline: iso("2026-11-08T16:00:00+03:00"),
+    instructions: "2 conteneurs 20' à enlever au Port de Djibouti, porte 3. Passage à Galafi avec le document de transit (fourni par nos soins).",
+    status: "ouverte",
+    responses: [{ carrierId: "car-03", status: "envoyee" }],
+  },
+  {
+    id: "rq-103",
+    ref: "DT-26-0103",
+    missionId: "m23",
+    companyId: "cmp-hfl",
+    createdAt: iso("2026-11-08T08:00:00+03:00"),
+    createdBy: "Exploitation HF",
+    deadline: iso("2026-11-08T14:00:00+03:00"),
+    instructions: "Tôles 28 t : plateau avec ridelles. Enlèvement à Doraleh le 09/11 à 07:00.",
+    status: "ouverte",
+    responses: [
+      { carrierId: "car-01", status: "vue", seenAt: iso("2026-11-08T08:20:00+03:00") },
+      { carrierId: "car-02", status: "refusee", seenAt: iso("2026-11-08T08:05:00+03:00"), answeredAt: iso("2026-11-08T08:15:00+03:00"), reason: "Pas de plateau disponible avant le 10/11." },
+    ],
+  },
+];
+
+export const messages: MissionMessage[] = [
+  { id: "msg-1", missionId: "m24", at: iso("2026-11-07T16:05:00+03:00"), author: "Exploitation RS", role: "exploitation", text: "Ordre de mission transmis. Le bon à enlever est en cours auprès de la douane, chargement prévu demain matin." },
+  { id: "msg-2", missionId: "m24", at: iso("2026-11-07T16:20:00+03:00"), author: "Ghoubet Routiers Associés", role: "transporteur", text: "Bien reçu. Camion DJ-418-GR prêt à Doraleh dès 04:30." },
+  { id: "msg-3", missionId: "m24", at: iso("2026-11-08T08:10:00+03:00"), author: "Exploitation RS", role: "exploitation", text: "BAE toujours pas reçu, nous relançons. Merci de ne pas vous présenter au quai avant notre confirmation." },
+];
+
+// ── Factures, paiements et débours ───────────────────────────
+const DAY = 24 * H;
+const ETH_CLIENTS = new Set(["cmp-eda"]); // client facturé en dollars
+const USD_RATE = 177.7;
+
+function seedInvoices(): Invoice[] {
+  const out: Invoice[] = [];
+  let fa = 300, ft = 300, db = 300;
+  const by = (m: Mission) => `Exploitation ${companies.find((c) => c.id === m.companyId)?.initials ?? ""}`;
+  missionsBase.forEach((m, i) => {
+    const kind = operationKind(m);
+    const stepAt = (st: number) => Date.parse(m.history.find((h) => h.step === st)?.at ?? m.createdAt);
+    const clientName = companies.find((c) => c.id === m.clientId)?.name ?? "Client";
+    const debours: Invoice[] = [];
+    // débours refacturés à la clôture, sauf un oubli volontaire (m04) pour la démonstration
+    const willRebill = m.step >= 7 && m.id !== "m04";
+    // Débours : frais avancés par l'entreprise dès la sortie du port
+    if (kind !== "local" && m.step >= 2) {
+      const lines: [string, string, number][] = [["Frais portuaires et manutention", "Port de Djibouti SA", 85000 + ((i * 7919) % 70000)]];
+      if (m.goodsType === "conteneurs") lines.push(["Magasinage", "Terminal à conteneurs", 25000 + ((i * 3301) % 30000)]);
+      lines.forEach(([label, supplier, amount], k) => {
+        const at = new Date(Math.min(stepAt(2) - 3 * H, NOW - H)).toISOString();
+        debours.push({
+          id: `inv-db-${m.id}-${k}`,
+          ref: `DB-26-${String(++db).padStart(4, "0")}`,
+          missionId: m.id,
+          flow: "debours",
+          label,
+          counterpartyId: null,
+          counterpartyName: supplier,
+          amount: Math.round(amount / 500) * 500,
+          currency: "DJF",
+          issuedAt: at,
+          dueAt: at,
+          status: "payee",
+          payments: [{ id: `pay-db-${m.id}-${k}`, at, amount: Math.round(amount / 500) * 500, mode: "virement", by: by(m) }],
+          attachment: { fileName: `Recu_${label.split(" ")[0]}_${m.ref}.pdf`, sizeKb: 120 + k * 40, at },
+          rebilledOn: null,
+          createdAt: at,
+          updatedAt: at,
+        });
+      });
+    }
+    // Facture client : émise après la livraison, échéance à 15 jours
+    if (m.step >= 6) {
+      const usd = ETH_CLIENTS.has(m.clientId);
+      const ref = `FA-26-${String(++fa).padStart(4, "0")}`;
+      const rebillTotal = willRebill ? debours.reduce((s, d) => s + d.amount, 0) : 0;
+      const base = m.priceDjf + rebillTotal;
+      const amount = usd ? Math.round((base / USD_RATE) * 100) / 100 : base;
+      const issued = Math.min(stepAt(6) + DAY, NOW - 2 * H);
+      const due = issued + 15 * DAY;
+      const pattern: Record<string, { status: Invoice["status"]; paidPct: number; note?: string }> = {
+        m01: { status: "envoyee", paidPct: 0 },
+        m02: { status: "payee", paidPct: 1 },
+        m03: { status: "partielle", paidPct: 0.5 },
+        m04: { status: "payee", paidPct: 1 },
+        m05: { status: "contestee", paidPct: 0, note: "Le client conteste 40 sacs manquants à la livraison." },
+        m06: { status: "payee", paidPct: 1 },
+        m07: { status: "envoyee", paidPct: 0 },
+        m08: { status: "partielle", paidPct: 0.6 },
+        m09: { status: "envoyee", paidPct: 0 },
+      };
+      const p = pattern[m.id] ?? { status: m.step === 6 && i % 2 === 0 ? "brouillon" : "emise", paidPct: 0 };
+      const payAt = new Date(Math.min(issued + 9 * DAY, NOW - 3 * H)).toISOString();
+      const paid = Math.round(amount * p.paidPct * 100) / 100;
+      out.push({
+        id: `inv-fa-${m.id}`,
+        ref,
+        missionId: m.id,
+        flow: "client",
+        label: `Transport ${placeName(m.origin)} → ${placeName(m.destination)}${rebillTotal ? " et débours" : ""}`,
+        counterpartyId: m.clientId,
+        counterpartyName: clientName,
+        amount,
+        currency: usd ? "USD" : "DJF",
+        issuedAt: new Date(issued).toISOString(),
+        dueAt: new Date(due).toISOString(),
+        status: p.status,
+        payments: paid > 0 ? [{ id: `pay-fa-${m.id}`, at: payAt, amount: paid, mode: usd ? "virement" : i % 3 === 0 ? "cheque" : "virement", reference: `VIR-${m.ref.slice(-4)}`, by: by(m) }] : [],
+        attachment: p.status === "brouillon" ? undefined : { fileName: `${ref}.pdf`, sizeKb: 84, at: new Date(issued).toISOString() },
+        note: p.note,
+        createdAt: new Date(issued).toISOString(),
+        updatedAt: new Date(issued).toISOString(),
+      });
+      if (willRebill) for (const d of debours) d.rebilledOn = ref;
+    }
+    out.push(...debours);
+    // Facture du transporteur partenaire : à rapprocher de la preuve de livraison
+    if (m.carrierId && m.step >= 6) {
+      const ref = `FT-26-${String(++ft).padStart(4, "0")}`;
+      const issued = Math.min(stepAt(6) + 2 * DAY, NOW - 3 * H);
+      const amount = Math.round((m.priceDjf * 0.72) / 1000) * 1000;
+      const paidStatus = m.step >= 7 && i % 3 !== 1;
+      const payAt = new Date(Math.min(issued + 6 * DAY, NOW - 4 * H)).toISOString();
+      out.push({
+        id: `inv-ft-${m.id}`,
+        ref,
+        missionId: m.id,
+        flow: "transporteur",
+        label: `Mission ${m.ref}`,
+        counterpartyId: m.carrierId,
+        counterpartyName: carriers.find((c) => c.id === m.carrierId)?.name ?? "Transporteur",
+        amount,
+        currency: "DJF",
+        issuedAt: new Date(issued).toISOString(),
+        dueAt: new Date(issued + 10 * DAY).toISOString(),
+        status: paidStatus ? "payee" : "emise",
+        payments: paidStatus ? [{ id: `pay-ft-${m.id}`, at: payAt, amount, mode: i % 2 ? "mobile_money" : "virement", by: by(m) }] : [],
+        attachment: { fileName: `Facture_${ref}.pdf`, sizeKb: 66, at: new Date(issued).toISOString() },
+        createdAt: new Date(issued).toISOString(),
+        updatedAt: new Date(issued).toISOString(),
+      });
+    }
+  });
+  return out;
+}
+
+const invoicesBase = seedInvoices();
+
 // ── Incidents ────────────────────────────────────────────────
 export const incidents: Incident[] = [
   { id: "i01", ref: "INC-26-0312", missionId: "m14", type: "retard", description: "Attente prolongée au poste frontière de Guelilé : contrôle documentaire renforcé sur les déclarations de transit.", date: iso("2026-11-08T07:40:00+03:00"), driverId: "d05", severity: "moyenne", status: "en_cours", location: "Poste frontière de Guelilé", delayMinutes: 150, reportedBy: "Mahamoud Aden Bouh" },
   { id: "i02", ref: "INC-26-0313", missionId: "m18", type: "panne", description: "Défaillance du groupe froid, température de la caisse en hausse (8 °C). Intervention d'un technicien demandée.", date: iso("2026-11-08T08:15:00+03:00"), driverId: "d15", severity: "critique", status: "nouveau", location: "RN5 — km 64, après Ali Sabieh", delayMinutes: 120, reportedBy: "Hodan Moussa Ibrahim" },
   { id: "i03", ref: "INC-26-0311", missionId: "m20", type: "panne", description: "Crevaison d'un pneu sur l'essieu arrière de la remorque, remplacement en cours sur place.", date: iso("2026-11-08T07:05:00+03:00"), driverId: "d20", severity: "elevee", status: "en_cours", location: "RN1 — 15 km avant Dikhil", delayMinutes: 90, reportedBy: "Said Ahmed Mohamed" },
-  { id: "i04", ref: "INC-26-0305", missionId: "m11", type: "retard", description: "Congestion à la sortie du port, départ décalé d'une heure.", date: iso("2026-11-05T06:30:00+03:00"), driverId: "d11", severity: "faible", status: "resolu", location: "Port de Djibouti — porte 3", delayMinutes: 60, reportedBy: "Daoud Ahmed Kamil" },
-  { id: "i05", ref: "INC-26-0291", missionId: "m04", type: "administratif", description: "Document de transit T1 incomplet, régularisé par le transitaire avant le passage en douane.", date: iso("2026-10-25T09:10:00+03:00"), driverId: "d13", severity: "moyenne", status: "resolu", location: "Terminal de Doraleh", delayMinutes: 75, reportedBy: "Exploitation BT" },
-  { id: "i06", ref: "INC-26-0298", missionId: "m08", type: "chargement", description: "Conteneur mal arrimé détecté au contrôle de sortie, ré-arrimage effectué par l'équipe du terminal.", date: iso("2026-11-01T06:00:00+03:00"), driverId: "d09", severity: "elevee", status: "resolu", location: "Terminal de Doraleh", delayMinutes: 40, reportedBy: "Moussa Djama Houmed" },
+  { id: "i04", ref: "INC-26-0305", missionId: "m11", type: "retard", description: "Congestion à la sortie du port, départ décalé d'une heure.", date: iso("2026-11-05T06:30:00+03:00"), driverId: null, severity: "faible", status: "resolu", location: "Port de Djibouti — porte 3", delayMinutes: 60, reportedBy: "Youssouf Kadar Elmi" },
+  { id: "i05", ref: "INC-26-0291", missionId: "m04", type: "administratif", description: "Document de transit T1 incomplet, régularisé par le transitaire avant le passage en douane.", date: iso("2026-10-25T09:10:00+03:00"), driverId: null, severity: "moyenne", status: "resolu", location: "Terminal de Doraleh", delayMinutes: 75, reportedBy: "Exploitation BT" },
+  { id: "i06", ref: "INC-26-0298", missionId: "m08", type: "chargement", description: "Conteneur mal arrimé détecté au contrôle de sortie, ré-arrimage effectué par l'équipe du terminal.", date: iso("2026-11-01T06:00:00+03:00"), driverId: null, severity: "elevee", status: "resolu", location: "Terminal de Doraleh", delayMinutes: 40, reportedBy: "Abdillahi Moussa Robleh" },
   { id: "i07", ref: "INC-26-0287", missionId: "m02", type: "panne", description: "Voyant pression d'huile allumé, contrôle et appoint effectués au garage de Dikhil.", date: iso("2026-10-22T10:20:00+03:00"), driverId: "d07", severity: "moyenne", status: "resolu", location: "Dikhil", delayMinutes: 50, reportedBy: "Idriss Goumaneh Said" },
-  { id: "i08", ref: "INC-26-0294", missionId: "m06", type: "accident", description: "Accrochage léger avec un véhicule léger au rond-point de PK12. Constat amiable, aucun blessé.", date: iso("2026-10-28T07:15:00+03:00"), driverId: "d19", severity: "elevee", status: "resolu", location: "Rond-point PK12", delayMinutes: 80, reportedBy: "Kamil Hassan Djibril" },
+  { id: "i08", ref: "INC-26-0294", missionId: "m06", type: "accident", description: "Accrochage léger avec un véhicule léger au rond-point de PK12. Constat amiable, aucun blessé.", date: iso("2026-10-28T07:15:00+03:00"), driverId: null, severity: "elevee", status: "resolu", location: "Rond-point PK12", delayMinutes: 80, reportedBy: "Abdo Houmed Saleh" },
   { id: "i09", ref: "INC-26-0314", missionId: "m17", type: "retard", description: "Déchargement retardé : quai du client occupé par une autre livraison.", date: iso("2026-11-08T10:05:00+03:00"), driverId: "d12", severity: "faible", status: "nouveau", location: "Ali Sabieh — entrepôt client", delayMinutes: 45, reportedBy: "Yacin Omar Robleh" },
   { id: "i10", ref: "INC-26-0310", missionId: "m13", type: "autre", description: "Contrôle de routine sur la RN1 à hauteur d'Arta. Aucune anomalie.", date: iso("2026-11-08T07:20:00+03:00"), driverId: "d02", severity: "faible", status: "resolu", location: "RN1 — Arta", delayMinutes: 15, reportedBy: "Omar Farah Djama" },
   { id: "i11", ref: "INC-26-0308", missionId: "m10", type: "chargement", description: "Écart de 400 L constaté au jaugeage à la livraison, vérification des compteurs en cours.", date: iso("2026-11-06T14:00:00+03:00"), driverId: "d04", severity: "moyenne", status: "en_cours", location: "Ali Sabieh — dépôt carburant", reportedBy: "Hassan Youssouf Abdi" },
@@ -333,6 +646,11 @@ export const notifications: AppNotification[] = [
   { id: "n07", kind: "mission", title: "Livraison effectuée — MS-26-1052", message: "Fers à béton livrés à PK12, mission prête à être clôturée.", at: iso("2026-11-07T12:00:00+03:00"), read: true, companyId: "cmp-bts", link: { kind: "mission", id: "m12" } },
   { id: "n08", kind: "systeme", title: "Mission non affectée", message: "La mission MS-26-1070 n'a ni camion ni chauffeur affecté.", at: iso("2026-11-07T14:30:00+03:00"), read: false, companyId: "cmp-rsh", link: { kind: "mission", id: "m30" } },
   { id: "n09", kind: "flotte", title: "Véhicule immobilisé", message: "Le camion DJ-763-RS est immobilisé (boîte de vitesses).", at: iso("2026-11-06T09:30:00+03:00"), read: true, companyId: "cmp-rsh", link: { kind: "truck", id: "t11" } },
+  { id: "n11", kind: "document", title: "Pièce en retard — Bon à enlever — MS-26-1064", message: "Échéance dépassée depuis 08:00. Le chargement ne peut pas démarrer sans cette pièce.", at: iso("2026-11-08T08:05:00+03:00"), read: false, companyId: "cmp-rsh", link: { kind: "mission", id: "m24" } },
+  { id: "n12", kind: "document", title: "Pièce à corriger — Facture commerciale — MS-26-1066", message: "Le nombre de colis ne correspond pas à la liste de colisage.", at: iso("2026-11-07T16:40:00+03:00"), read: false, companyId: "cmp-bts", link: { kind: "mission", id: "m26" } },
+  { id: "n13", kind: "transport", title: "Nouvelle demande de transport — DT-26-0102", message: "Port de Djibouti → Dire Dawa, 2 × 20'. Réponse attendue avant 16:00.", at: iso("2026-11-08T09:10:00+03:00"), read: false, carrierId: "car-03", link: { kind: "mission", id: "m30" } },
+  { id: "n14", kind: "transport", title: "Refus — Barwaqo Trucking — DT-26-0103", message: "Pas de plateau disponible avant le 10/11.", at: iso("2026-11-08T08:15:00+03:00"), read: false, companyId: "cmp-hfl", link: { kind: "mission", id: "m23" } },
+  { id: "n15", kind: "document", title: "Pièce reçue — Bon de sortie port — MS-26-1056", message: "Déposée par l'agent du port. À vérifier avant le départ du camion DJ-736-RS.", at: iso("2026-11-08T09:25:00+03:00"), read: false, companyId: "cmp-rsh", link: { kind: "mission", id: "m16" } },
   { id: "n10", kind: "systeme", title: "Rapport hebdomadaire disponible", message: "Le rapport d'activité de la semaine 45 est prêt.", at: iso("2026-11-06T07:00:00+03:00"), read: true },
 ];
 
@@ -348,6 +666,45 @@ export const activity: ActivityItem[] = [
   { id: "a09", at: iso("2026-11-07T12:00:00+03:00"), actor: "Abdi Nour Aden", text: "a livré la mission MS-26-1052 à PK12", tone: "success", companyId: "cmp-bts", link: { kind: "mission", id: "m12" } },
   { id: "a10", at: iso("2026-11-07T14:30:00+03:00"), actor: "Exploitation RS", text: "a créé la mission MS-26-1070 (à affecter)", tone: "info", companyId: "cmp-rsh", link: { kind: "mission", id: "m30" } },
 ];
+
+// ── Utilisateurs des espaces entreprise ──────────────────────
+const STAFF: Record<string, [string, string, string?]> = {
+  "cmp-hfl": ["Kadra Ali Waberi", "Mohamed Said Elmi", "Hibo Ahmed Dirieh"],
+  "cmp-rsh": ["Abdourahman Ismaël Farah", "Fozia Houssein Ali"],
+  "cmp-tcs": ["Nasser Omar Bouh", "Amina Daher Robleh"],
+  "cmp-bts": ["Ilyas Moussa Guedi", "Safia Abdi Hassan"],
+  "cmp-dle": ["Charmarké Ali Doualeh", "Neima Youssouf Aden"],
+  "cmp-hts": ["Ayanleh Farah Bileh", "Deka Ibrahim Nour"],
+};
+
+const domain = (c: Company) => c.email.split("@")[1];
+const slug = (name: string) => name.split(" ")[0].toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+export const users: CompanyUser[] = companies
+  .filter((c) => STAFF[c.id])
+  .flatMap((c, ci) => {
+    const [op, compta, reader] = STAFF[c.id];
+    const created = iso("2025-09-01T09:00:00+03:00");
+    const list: CompanyUser[] = [
+      { id: `usr-${c.id.slice(4)}-admin`, companyId: c.id, name: c.manager, email: `${slug(c.manager)}@${domain(c)}`, role: "admin", active: true, twoFactor: true, lastLoginAt: new Date(NOW - (1 + ci) * H).toISOString(), createdAt: created },
+      { id: `usr-${c.id.slice(4)}-op`, companyId: c.id, name: op, email: `${slug(op)}@${domain(c)}`, role: "operateur", active: true, twoFactor: false, lastLoginAt: new Date(NOW - (2 + ci) * H).toISOString(), createdAt: created },
+      // comptabilité de HFL sans double authentification : alerte de démonstration
+      { id: `usr-${c.id.slice(4)}-compta`, companyId: c.id, name: compta, email: `${slug(compta)}@${domain(c)}`, role: "comptabilite", active: true, twoFactor: c.id !== "cmp-hfl", lastLoginAt: new Date(NOW - (20 + ci * 3) * H).toISOString(), createdAt: created },
+    ];
+    if (reader) list.push({ id: `usr-${c.id.slice(4)}-lecture`, companyId: c.id, name: reader, email: `${slug(reader)}@${domain(c)}`, role: "lecture", active: true, twoFactor: false, lastLoginAt: new Date(NOW - 50 * H).toISOString(), createdAt: created });
+    return list;
+  });
+
+const ROLE_LABEL: Record<CompanyUser["role"], string> = { admin: "Administrateur entreprise", operateur: "Opérateur", comptabilite: "Comptabilité", lecture: "Lecture seule" };
+
+/** Journal d'audit initial : connexions et actions déjà tracées dans l'activité. */
+const auditBase: AuditEntry[] = [
+  ...users.map((u, i) => ({ id: `aud-login-${i}`, at: u.lastLoginAt!, actor: u.name, role: ROLE_LABEL[u.role], companyId: u.companyId, action: "connexion" as const, text: `s'est connecté (${u.twoFactor ? "double authentification" : "mot de passe seul"})` })),
+  ...activity.map((a, i) => ({ id: `aud-act-${i}`, at: a.at, actor: a.actor, role: a.actor.startsWith("Exploitation") ? "Opérateur" : "Chauffeur", companyId: a.companyId, action: auditActionOf(a.text), text: a.text, link: a.link })),
+  { id: "aud-x1", at: iso("2026-11-07T17:40:00+03:00"), actor: "Kadra Ali Waberi", role: "Opérateur", companyId: "cmp-hfl", action: "document" as const, text: "a consulté « Connaissement (B/L) » — MS-26-1054" },
+  { id: "aud-x2", at: iso("2026-11-06T09:12:00+03:00"), actor: "Fatouma Omar Daher", role: "Administrateur entreprise", companyId: "cmp-hfl", action: "droits" as const, text: "a changé le rôle de Hibo Ahmed Dirieh : Opérateur → Lecture seule" },
+  { id: "aud-x3", at: iso("2026-11-05T16:30:00+03:00"), actor: "Mohamed Said Elmi", role: "Comptabilité", companyId: "cmp-hfl", action: "export" as const, text: "a exporté la liste des missions (CSV, 30 lignes)" },
+].sort((a, b) => b.at.localeCompare(a.at));
 
 // ── Statistiques mensuelles (historique consolidé fictif) ────
 const months = ["2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11"];
@@ -386,6 +743,12 @@ export function createSeed(): AppData {
     missions: structuredClone(missionsBase),
     loads: structuredClone(loadsBase),
     incidents: structuredClone(incidents),
+    documents: structuredClone(documentsBase),
+    requests: structuredClone(requests),
+    messages: structuredClone(messages),
+    invoices: structuredClone(invoicesBase),
+    users: structuredClone(users),
+    audit: structuredClone(auditBase),
     notifications: structuredClone(notifications),
     activity: structuredClone(activity),
     monthly: structuredClone(monthly),
@@ -402,6 +765,6 @@ export function createSeed(): AppData {
       delayThresholdMin: 30,
       compactTables: false,
     },
-    prefs: { companyId: "cmp-hfl", driverId: "d01" },
+    prefs: { companyId: "cmp-hfl", driverId: "d01", carrierId: "car-03", userId: "usr-hfl-admin" },
   };
 }

@@ -10,6 +10,8 @@ import {
   CircleDollarSign,
   Clock,
   FlaskConical,
+  Handshake,
+  Phone,
   MapPin,
   Package,
   Pencil,
@@ -19,7 +21,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { actions } from "@/lib/store";
-import { useData } from "@/lib/store/selectors";
+import { useData, usePermissions } from "@/lib/store/selectors";
 import { GOODS_TYPES, INCIDENT_STATUS, INCIDENT_TYPES, LOAD_STATUS, MISSION_STATUS, OPERATION_STEPS, SEVERITY, TRUCK_TYPES } from "@/lib/constants";
 import { placeById, placeName, routeDistanceKm } from "@/lib/data/geo";
 import { driverName, formatDate, formatDateTime, formatDjf, formatNumber, loadStatusFromStep, missionProgress, missionStatus } from "@/lib/utils";
@@ -35,6 +37,13 @@ import { AssignModal } from "@/components/forms/assign-form";
 import { IncidentFormModal } from "@/components/forms/incident-form";
 import { MissionFormModal } from "@/components/forms/mission-form";
 import { OperationTimeline } from "@/components/operations/timeline";
+import { ForceStepModal, MissionDocuments } from "@/components/documents/mission-documents";
+import { blockingDocs } from "@/lib/utils/documents";
+import { isAssigned } from "@/lib/utils/transport";
+import { TransportRequestModal, TransportRequestPanel } from "@/components/transport/transport-request";
+import { MissionThread } from "@/components/messages/mission-thread";
+import { ClientSharePanel } from "@/components/tracking/client-share-panel";
+import { MissionInvoices } from "@/components/invoices/mission-invoices";
 import { useDetail } from "./detail-provider";
 import { DetailSection, EntityLink, MiniStat, NotFound } from "./parts";
 
@@ -71,14 +80,20 @@ function RouteSummary({ origin, destination }: { origin: string; destination: st
 // ── Mission ──────────────────────────────────────────────────
 export function MissionDetail({ id }: { id: string }) {
   const { all, lookups, scope } = useData();
+  const perms = usePermissions();
   const { open, close } = useDetail();
   const { toast } = useToast();
   const [edit, setEdit] = useState(false);
   const [assign, setAssign] = useState(false);
   const [incident, setIncident] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [forceTarget, setForceTarget] = useState<OperationStep | null>(null);
+  const [request, setRequest] = useState(false);
   const m = lookups.mission(id);
-  if (!m) return <NotFound />;
+  // espace entreprise : jamais la mission d'une autre société
+  if (!m || (scope && m.companyId !== scope)) return <NotFound />;
+  const docs = all.documents.filter((d) => d.missionId === m.id);
+  const hasBilling = all.invoices.some((i) => i.missionId === m.id && (i.status !== "brouillon" || i.payments.length > 0));
 
   const company = lookups.company(m.companyId);
   const client = lookups.company(m.clientId);
@@ -89,13 +104,18 @@ export function MissionDetail({ id }: { id: string }) {
   const incidents = all.incidents.filter((i) => i.missionId === m.id);
   const status = missionStatus(m);
   const next = m.step < 7 ? OPERATION_STEPS[m.step + 1] : null;
-  const actor = scope ? `Exploitation ${company?.initials ?? ""}` : all.settings.userName;
-  const needsAssignment = !m.truckId || !m.driverId;
+  const actor = perms.actor;
+  const { can } = perms;
+  const needsAssignment = !isAssigned(m);
 
   const advance = (step: OperationStep) => {
     if (step >= 2 && needsAssignment) {
       toast("Affectation requise", { message: "Affectez un camion et un chauffeur avant de démarrer la mission.", tone: "warning" });
       setAssign(true);
+      return;
+    }
+    if (blockingDocs(docs, m.id, m.step, step).length > 0) {
+      setForceTarget(step);
       return;
     }
     actions.setMissionStep(m.id, step, actor);
@@ -117,15 +137,34 @@ export function MissionDetail({ id }: { id: string }) {
           <p className="text-sm text-slate-500">{GOODS_TYPES[m.goodsType]}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" icon={Pencil} onClick={() => setEdit(true)}>
-            Modifier
-          </Button>
-          <Button variant="secondary" size="sm" icon={UserCheck} onClick={() => setAssign(true)} disabled={m.step >= 6}>
-            Affecter
-          </Button>
-          <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600 hover:bg-red-50" onClick={() => setConfirm(true)}>
-            Supprimer
-          </Button>
+          {can("mission.edit") && (
+            <>
+              <Button variant="secondary" size="sm" icon={Pencil} onClick={() => setEdit(true)}>
+                Modifier
+              </Button>
+              <Button variant="secondary" size="sm" icon={UserCheck} onClick={() => setAssign(true)} disabled={m.step >= 6}>
+                Affecter
+              </Button>
+            </>
+          )}
+          {can("request.manage") && (
+            <Button variant="secondary" size="sm" icon={Handshake} onClick={() => setRequest(true)} disabled={m.step >= 2}>
+              Demander à un transporteur
+            </Button>
+          )}
+          {can("mission.edit") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Trash2}
+              className="text-red-600 hover:bg-red-50"
+              disabled={hasBilling}
+              title={hasBilling ? "Mission facturée : annulez les factures plutôt que de supprimer le dossier" : undefined}
+              onClick={() => setConfirm(true)}
+            >
+              Supprimer
+            </Button>
+          )}
         </div>
       </div>
 
@@ -138,6 +177,9 @@ export function MissionDetail({ id }: { id: string }) {
           <span className="tabular-nums">{missionProgress(m.step)} %</span>
         </div>
         <ProgressBar value={missionProgress(m.step)} tone={m.delayed ? "orange" : m.step >= 6 ? "green" : "blue"} className="mt-2 bg-white/10" />
+        {!can("mission.step") ? (
+          <p className="mt-3 text-xs text-white/60">Consultation seule : votre rôle ({perms.roleLabel}) ne permet pas de modifier l&apos;avancement.</p>
+        ) : (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           {next ? (
             <Button variant={next.step >= 6 ? "success" : "primary"} iconRight={ChevronRight} className="flex-1" onClick={() => advance(next.step)}>
@@ -156,11 +198,15 @@ export function MissionDetail({ id }: { id: string }) {
             </Select>
           </div>
         </div>
-        {m.step < 6 && (
+        )}
+        {m.step < 6 && (can("incident.report") || can("mission.step")) && (
           <div className="mt-2 flex flex-wrap gap-2">
-            <Button size="sm" variant="ghost" icon={AlertTriangle} className="text-amber-300 hover:bg-white/10 hover:text-amber-200" onClick={() => setIncident(true)}>
-              Déclarer un incident
-            </Button>
+            {can("incident.report") && (
+              <Button size="sm" variant="ghost" icon={AlertTriangle} className="text-amber-300 hover:bg-white/10 hover:text-amber-200" onClick={() => setIncident(true)}>
+                Déclarer un incident
+              </Button>
+            )}
+            {can("mission.step") && (
             <Button
               size="sm"
               variant="ghost"
@@ -173,6 +219,7 @@ export function MissionDetail({ id }: { id: string }) {
             >
               {m.delayed ? "Lever le retard" : "Marquer en retard"}
             </Button>
+            )}
           </div>
         )}
       </div>
@@ -183,7 +230,7 @@ export function MissionDetail({ id }: { id: string }) {
           <div className="mt-4 divide-y divide-slate-100 border-t border-slate-100">
             <InfoRow icon={CalendarClock} label="Départ prévu" value={formatDateTime(m.plannedDeparture)} />
             <InfoRow icon={CalendarClock} label="Arrivée prévue" value={formatDateTime(m.plannedArrival)} />
-            <InfoRow icon={CircleDollarSign} label="Tarif" value={formatDjf(m.priceDjf)} />
+            {can("price.view") && <InfoRow icon={CircleDollarSign} label="Tarif" value={formatDjf(m.priceDjf)} />}
           </div>
         </DetailSection>
         <DetailSection title="Suivi des opérations">
@@ -191,19 +238,32 @@ export function MissionDetail({ id }: { id: string }) {
         </DetailSection>
       </div>
 
+      <MissionDocuments mission={m} docs={docs} actor={actor} canUpload={can("document.upload")} canReview={can("document.review")} />
+
+      <TransportRequestPanel mission={m} by={actor} onNew={() => setRequest(true)} canManage={can("request.manage")} />
+
+      <ClientSharePanel key={m.id} mission={m} by={actor} readOnly={!can("share.manage")} />
+
+      {can("invoice.view") && <MissionInvoices mission={m} invoices={all.invoices} by={actor} canEdit={can("invoice.edit")} />}
+
       <DetailSection title="Acteurs">
         <div className="grid gap-2 sm:grid-cols-2">
           <EntityLink onClick={() => company && open({ kind: "company", id: company.id })} leading={<CompanyLogo company={company} />} label={company?.name ?? "—"} sub="Entreprise" />
           <EntityLink onClick={() => client && open({ kind: "company", id: client.id })} leading={<CompanyLogo company={client} />} label={client?.name ?? "—"} sub="Client" />
-          {truck ? (
+          {m.carrierAssignment ? (
+            <>
+              <EntityLink label={<span className="font-mono">{m.carrierAssignment.plate}</span>} sub={`Camion fourni par ${carrier?.name ?? "le transporteur"}`} />
+              <EntityLink label={m.carrierAssignment.driverName} sub={<span className="inline-flex items-center gap-1"><Phone className="size-3" /> {m.carrierAssignment.driverPhone}</span>} />
+            </>
+          ) : truck ? (
             <EntityLink onClick={() => open({ kind: "truck", id: truck.id })} leading={<SafeImage src={truck.image} alt={truck.plate} className="h-10 w-14 shrink-0 rounded-lg" sizes="56px" />} label={<span className="font-mono">{truck.plate}</span>} sub={`${TRUCK_TYPES[truck.type]} · ${truck.capacityT} t`} />
           ) : (
-            <EntityLink onClick={() => setAssign(true)} label="Camion non affecté" sub="Cliquer pour affecter" />
+            <EntityLink onClick={can("mission.edit") ? () => setAssign(true) : undefined} label="Camion non affecté" sub={can("mission.edit") ? "Cliquer pour affecter" : undefined} />
           )}
-          {driver ? (
+          {m.carrierAssignment ? null : driver ? (
             <EntityLink onClick={() => open({ kind: "driver", id: driver.id })} leading={<DriverAvatar driver={driver} />} label={driverName(driver)} sub={`Chauffeur · ${driver.phone}`} />
           ) : (
-            <EntityLink onClick={() => setAssign(true)} label="Chauffeur non affecté" sub="Cliquer pour affecter" />
+            <EntityLink onClick={can("mission.edit") ? () => setAssign(true) : undefined} label="Chauffeur non affecté" sub={can("mission.edit") ? "Cliquer pour affecter" : undefined} />
           )}
           {carrier && <EntityLink onClick={() => open({ kind: "carrier", id: carrier.id })} label={carrier.name} sub="Transporteur partenaire" />}
         </div>
@@ -221,7 +281,7 @@ export function MissionDetail({ id }: { id: string }) {
         )}
       </DetailSection>
 
-      <DetailSection title={`Incidents (${incidents.length})`} action={m.step < 6 && <Button size="sm" variant="ghost" icon={AlertTriangle} onClick={() => setIncident(true)}>Déclarer</Button>}>
+      <DetailSection title={`Incidents (${incidents.length})`} action={m.step < 6 && can("incident.report") && <Button size="sm" variant="ghost" icon={AlertTriangle} onClick={() => setIncident(true)}>Déclarer</Button>}>
         <div className="space-y-2">
           {incidents.map((i) => (
             <EntityLink key={i.id} onClick={() => open({ kind: "incident", id: i.id })} label={`${INCIDENT_TYPES[i.type]} · ${i.ref}`} sub={i.description} leading={<StatusBadge map={SEVERITY} value={i.severity} />} />
@@ -230,16 +290,38 @@ export function MissionDetail({ id }: { id: string }) {
         </div>
       </DetailSection>
 
+      <DetailSection title="Échanges sur la mission">
+        <MissionThread missionId={m.id} messages={all.messages} author={actor} role="exploitation" disabledReason={can("message.post") ? undefined : "Consultation seule : votre rôle ne permet pas d'envoyer des messages."} />
+      </DetailSection>
+
+      <TransportRequestModal open={request} onClose={() => setRequest(false)} mission={m} by={actor} />
       <MissionFormModal open={edit} onClose={() => setEdit(false)} mission={m} />
+      <ForceStepModal
+        mission={m}
+        docs={docs}
+        target={forceTarget}
+        actor={actor}
+        canReview={can("document.review")}
+        onClose={() => setForceTarget(null)}
+        onProceed={(step) => {
+          actions.setMissionStep(m.id, step, actor);
+          toast("Statut mis à jour", { message: `${m.ref} : ${OPERATION_STEPS[step].label}` });
+        }}
+        onForce={(step, reason) => {
+          actions.setMissionStep(m.id, step, actor, undefined, reason);
+          toast("Passage forcé enregistré", { message: `${m.ref} : ${OPERATION_STEPS[step].label}`, tone: "warning" });
+        }}
+      />
       <AssignModal open={assign} onClose={() => setAssign(false)} mission={m} />
       <IncidentFormModal open={incident} onClose={() => setIncident(false)} missionId={m.id} reportedBy={actor} />
       <ConfirmDialog
         open={confirm}
         onClose={() => setConfirm(false)}
         title="Supprimer cette mission ?"
-        message={`La mission ${m.ref}, son chargement et ses incidents associés seront supprimés.`}
+        message={`La mission ${m.ref} sera supprimée avec son chargement, ses incidents, ses documents, ses demandes de transport et ses échanges. L'action est tracée dans le journal d'audit.`}
         confirmLabel="Supprimer"
         onConfirm={() => {
+          if (hasBilling) return;
           actions.deleteMission(m.id);
           toast("Mission supprimée", { message: m.ref, tone: "info" });
           close();
@@ -253,9 +335,10 @@ export function MissionDetail({ id }: { id: string }) {
 export function LoadDetail({ id }: { id: string }) {
   const { all, lookups } = useData();
   const { open } = useDetail();
+  const { scope } = useData();
   const l = all.loads.find((x) => x.id === id);
-  if (!l) return <NotFound />;
-  const m = lookups.mission(l.missionId);
+  const m = l ? lookups.mission(l.missionId) : undefined;
+  if (!l || (scope && m?.companyId !== scope)) return <NotFound />;
   const client = lookups.company(m?.clientId);
   const status = loadStatusFromStep(m?.step ?? 0);
 
@@ -305,9 +388,11 @@ export function IncidentDetail({ id }: { id: string }) {
   const { open, close } = useDetail();
   const { toast } = useToast();
   const [confirm, setConfirm] = useState(false);
+  const { scope } = useData();
+  const { can } = usePermissions();
   const i = all.incidents.find((x) => x.id === id);
-  if (!i) return <NotFound />;
-  const m = lookups.mission(i.missionId);
+  const m = i ? lookups.mission(i.missionId) : undefined;
+  if (!i || (scope && m?.companyId !== scope)) return <NotFound />;
   const driver = lookups.driver(i.driverId);
   const statuses: IncidentStatus[] = ["nouveau", "en_cours", "resolu"];
 
@@ -327,9 +412,11 @@ export function IncidentDetail({ id }: { id: string }) {
             <p className="font-mono text-sm text-slate-500">{i.ref}</p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600 hover:bg-red-50" onClick={() => setConfirm(true)}>
-          Supprimer
-        </Button>
+        {can("incident.report") && (
+          <Button variant="ghost" size="sm" icon={Trash2} className="text-red-600 hover:bg-red-50" onClick={() => setConfirm(true)}>
+            Supprimer
+          </Button>
+        )}
       </div>
 
       <DetailSection title="Statut de résolution">
@@ -337,6 +424,7 @@ export function IncidentDetail({ id }: { id: string }) {
           {statuses.map((s) => (
             <button
               key={s}
+              disabled={!can("incident.report")}
               onClick={() => {
                 actions.setIncidentStatus(i.id, s);
                 toast("Statut de l'incident mis à jour", { message: `${i.ref} : ${INCIDENT_STATUS[s].label}`, tone: s === "resolu" ? "success" : "info" });

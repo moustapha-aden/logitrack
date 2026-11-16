@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { BadgeCheck, Eye, LayoutGrid, List, Pencil, Plus, Power, Truck as TruckIcon, Weight, Wrench } from "lucide-react";
-import { useData } from "@/lib/store/selectors";
+import { useData, usePermissions } from "@/lib/store/selectors";
+import { Can } from "@/components/auth/can";
 import { TRUCK_STATUS, TRUCK_TYPES } from "@/lib/constants";
 import { cn, driverName, formatNumber, includesText } from "@/lib/utils";
 import type { Truck, TruckStatus, TruckType } from "@/types";
@@ -18,6 +19,7 @@ import { useDetail } from "@/components/details/detail-provider";
 
 export function TrucksView() {
   const { trucks, lookups, scope, all } = useData();
+  const { can } = usePermissions();
   const { open } = useDetail();
   const [q, setQ] = useState("");
   const [company, setCompany] = useState("all");
@@ -37,7 +39,7 @@ export function TrucksView() {
     <ActionMenu
       items={[
         { label: "Voir la fiche", icon: Eye, onClick: () => open({ kind: "truck", id: t.id }) },
-        { label: "Modifier", icon: Pencil, onClick: () => setForm({ open: true, truck: t }) },
+        can("fleet.edit") && { label: "Modifier", icon: Pencil, onClick: () => setForm({ open: true, truck: t }) },
       ]}
     />
   );
@@ -79,9 +81,9 @@ export function TrucksView() {
         title={scope ? "Mes camions" : "Gestion de la flotte"}
         description={`${trucks.length} véhicules · capacité cumulée ${formatNumber(totalCapacity)} tonnes`}
         actions={
-          <Button icon={Plus} onClick={() => setForm({ open: true })}>
+          <Can perm="fleet.edit"><Button icon={Plus} onClick={() => setForm({ open: true })}>
             Ajouter un camion
-          </Button>
+          </Button></Can>
         }
       />
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">

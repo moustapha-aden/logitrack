@@ -7,9 +7,11 @@ import {
   ArrowLeft,
   ArrowRight,
   Bell,
+  BellRing,
   Box,
   Building2,
   CalendarClock,
+  Camera,
   Check,
   ChevronRight,
   Clock,
@@ -18,6 +20,7 @@ import {
   History,
   Home,
   ListChecks,
+  Lock,
   MapPin,
   Navigation,
   Phone,
@@ -29,11 +32,15 @@ import {
   User,
   Wrench,
 } from "lucide-react";
-import { actions, setActor, useAppData } from "@/lib/store";
-import { DEMO_NOW, GOODS_TYPES, INCIDENT_TYPES, OPERATION_STEPS, TRUCK_TYPES } from "@/lib/constants";
+import { actions, setActor, setActorRole, useAppData } from "@/lib/store";
+import { DEMO_NOW, DOC_STATUS, DOC_TYPES, GOODS_TYPES, INCIDENT_TYPES, OPERATION_STEPS, TRUCK_TYPES } from "@/lib/constants";
+import { blockerLabel, blockingDocs, isBlockingOpen, isCleared, routeDocs } from "@/lib/utils/documents";
+import { isAssigned } from "@/lib/utils/transport";
+import { demoNowIso } from "@/lib/utils/clock";
 import { placeById, placeName, routeDistanceKm } from "@/lib/data/geo";
 import { cn, driverName, formatDate, formatDateShort, formatDateTime, formatNumber, formatTime, missionProgress } from "@/lib/utils";
-import type { IncidentType, Mission, OperationStep, Severity } from "@/types";
+import type { AppData, IncidentType, Mission, OperationStep, Severity } from "@/types";
+import { StatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form";
 import { DriverAvatar, SafeImage } from "@/components/ui/media";
@@ -42,6 +49,7 @@ import { useToast } from "@/components/ui/toast";
 import { DjiboutiMap } from "@/components/maps";
 import { OperationTimeline } from "@/components/operations/timeline";
 import { Logo } from "@/components/layout/logo";
+import { useFilePicker } from "@/components/documents/mission-documents";
 
 type Screen = { name: "home" } | { name: "missions" } | { name: "history" } | { name: "profile" } | { name: "mission"; id: string };
 
@@ -54,6 +62,24 @@ const DRIVER_ACTIONS: Partial<Record<OperationStep, { label: string; next: Opera
   4: { label: "Arrivé à destination", next: 5, icon: MapPin, hint: "Vous êtes arrivé chez le destinataire." },
   5: { label: "Confirmer la livraison", next: 6, icon: Flag, hint: "La marchandise a été remise au client." },
 };
+
+type Toast = ReturnType<typeof useToast>["toast"];
+
+/**
+ * Contrôles avant un passage d'étape côté chauffeur : mission affectée et pièces bloquantes vérifiées.
+ * En cas de blocage, l'exploitation est prévenue automatiquement (une fois par pièce).
+ */
+function canAdvance(data: AppData, m: Mission, next: OperationStep, by: string, toast: Toast): boolean {
+  if (next >= 2 && !isAssigned(m)) {
+    toast("Mission pas encore affectée", { message: "Le camion et le chauffeur doivent être confirmés par l'exploitation.", tone: "warning" });
+    return false;
+  }
+  const blockers = blockingDocs(data.documents, m.id, m.step, next);
+  if (blockers.length === 0) return true;
+  actions.reportBlocked(m.id, blockers.map((d) => d.id), by);
+  toast("Étape bloquée par une pièce", { message: `${blockers.map(blockerLabel).join(" · ")}. L'exploitation a été prévenue.`, tone: "warning" });
+  return false;
+}
 
 function useDriverContext() {
   const data = useAppData();
@@ -124,7 +150,7 @@ function MissionCard({ m, onOpen }: { m: Mission; onOpen: () => void }) {
 
 // ── Écrans ───────────────────────────────────────────────────
 function HomeScreen({ go, onDelay, onIncident }: { go: (s: Screen) => void; onDelay: (id: string) => void; onIncident: (id: string) => void }) {
-  const { driver, truck, company, current, upcoming, done } = useDriverContext();
+  const { data, driver, truck, company, current, upcoming, done } = useDriverContext();
   const { toast } = useToast();
   if (!driver) return null;
   const action = current ? DRIVER_ACTIONS[current.step] : undefined;
@@ -132,6 +158,7 @@ function HomeScreen({ go, onDelay, onIncident }: { go: (s: Screen) => void; onDe
   const quickAction = () => {
     if (!current) return;
     if (!action || action.next === 6) return go({ name: "mission", id: current.id });
+    if (!canAdvance(data, current, action.next, driverName(driver), toast)) return;
     actions.setMissionStep(current.id, action.next, driverName(driver));
     toast(OPERATION_STEPS[action.next].label, { message: `${current.ref} — statut transmis à l'exploitation` });
   };
@@ -292,6 +319,7 @@ function MissionScreen({ id, go, onDelay, onIncident }: { id: string; go: (s: Sc
       setConfirmDelivery(true);
       return;
     }
+    if (!canAdvance(data, m, action.next, driverName(driver), toast)) return;
     actions.setMissionStep(m.id, action.next, driverName(driver));
     toast(OPERATION_STEPS[action.next].label, { message: `${m.ref} — statut transmis à l'exploitation` });
   };
@@ -372,6 +400,8 @@ function MissionScreen({ id, go, onDelay, onIncident }: { id: string; go: (s: Sc
         {load?.hazardous && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">⚠ Marchandise dangereuse — respectez les consignes ADR.</p>}
       </div>
 
+      <DriverDocuments m={m} data={data} by={driverName(driver)} />
+
       <div className="rounded-2xl border border-slate-200 bg-white p-4">
         <p className="mb-3 text-sm font-semibold">Progression de la mission</p>
         <OperationTimeline mission={m} compact />
@@ -379,17 +409,17 @@ function MissionScreen({ id, go, onDelay, onIncident }: { id: string; go: (s: Sc
 
       {m.step < 6 && (
         <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" icon={Clock} className="h-12 border-amber-200 text-amber-700" onClick={() => onDelay(m.id)}>
+          <Button variant="secondary" icon={Clock} className="h-auto min-h-12 border-amber-200 py-2 leading-tight whitespace-normal text-amber-700" onClick={() => onDelay(m.id)}>
             Signaler un retard
           </Button>
-          <Button variant="secondary" icon={AlertTriangle} className="h-12 border-red-200 text-red-600" onClick={() => onIncident(m.id)}>
+          <Button variant="secondary" icon={AlertTriangle} className="h-auto min-h-12 border-red-200 py-2 leading-tight whitespace-normal text-red-600" onClick={() => onIncident(m.id)}>
             Déclarer un incident
           </Button>
         </div>
       )}
 
       {/* Barre d'action fixe */}
-      <div className="fixed inset-x-0 bottom-[68px] z-30 mx-auto max-w-md px-4 pb-3 lg:absolute lg:bottom-[68px]">
+      <div className="fixed inset-x-0 bottom-[calc(68px+env(safe-area-inset-bottom))] z-30 mx-auto max-w-md px-4 pb-3 lg:absolute lg:bottom-[68px]">
         {action ? (
           <button onClick={runAction} className={cn("flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold text-white shadow-pop transition active:scale-[0.98]", action.next >= 6 ? "bg-success-600" : "bg-brand-600")}>
             <action.icon className="size-5" /> {action.label}
@@ -410,9 +440,75 @@ function MissionScreen({ id, go, onDelay, onIncident }: { id: string; go: (s: Sc
         confirmLabel="Confirmer la livraison"
         onConfirm={() => {
           actions.setMissionStep(m.id, 6, driverName(driver), "Livraison confirmée par le chauffeur");
-          toast("Livraison effectuée 🎉", { message: `${m.ref} — merci, bonne route !` });
+          toast("Livraison effectuée 🎉", { message: `${m.ref} — photographiez maintenant le bon de livraison signé.` });
         }}
       />
+    </div>
+  );
+}
+
+/**
+ * Documents de route : pièces partagées et toutes les pièces bloquantes (avec leur statut),
+ * dépôt des pièces fournies par le chauffeur (EIR, preuve de livraison) et appel à l'exploitation.
+ */
+function DriverDocuments({ m, data, by }: { m: Mission; data: AppData; by: string }) {
+  const { toast } = useToast();
+  const docs = routeDocs(data.documents, m.id);
+  const blocking = docs.filter((d) => isBlockingOpen(d, m.step));
+  const { pick, element } = useFilePicker(
+    (id, file) => {
+      actions.uploadDocument(id, file, by);
+      toast("Photo envoyée", { message: "L'exploitation va vérifier la pièce." });
+    },
+    "image/*",
+    true,
+  );
+  // le chauffeur fournit le POD (à destination) et l'interchange conteneur (dès le chargement)
+  const canShoot = (d: (typeof docs)[number]) => (d.responsible === "chauffeur" || d.responsible === "transporteur") && !isCleared(d) && d.status !== "recu" && (d.type === "pod" ? m.step >= 5 : m.step >= 2);
+  if (docs.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      {element}
+      <p className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        <FileText className="size-4 text-slate-400" /> Documents de route
+      </p>
+      <ul className="divide-y divide-slate-100">
+        {docs.map((d) => {
+          const blocks = isBlockingOpen(d, m.step);
+          return (
+            <li key={d.id} className="py-2.5">
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className={cn("flex min-w-0 items-center gap-1.5", isCleared(d) ? "text-slate-700" : "text-slate-500")}>
+                  {blocks && <Lock className="size-3.5 shrink-0 text-amber-600" aria-label="Pièce bloquante" />}
+                  <span className="truncate">{DOC_TYPES[d.type].label}</span>
+                </span>
+                <StatusBadge map={DOC_STATUS} value={d.status} />
+              </div>
+              {blocks && <p className="mt-0.5 text-[11px] text-amber-700">Nécessaire avant « {OPERATION_STEPS[d.blocksStep!].label} »{d.status === "recu" ? " — reçue, en cours de vérification" : ""}</p>}
+              {d.status === "a_corriger" && d.note && <p className="mt-1 rounded-lg bg-red-50 px-2 py-1 text-xs text-red-700">À refaire : {d.note}</p>}
+              {canShoot(d) && (
+                <Button icon={Camera} size="sm" variant={d.type === "pod" && m.step >= 6 ? "primary" : "secondary"} className="mt-2 h-auto min-h-10 w-full whitespace-normal py-2" onClick={() => pick(d.id)}>
+                  {d.type === "pod" ? "Photographier le bon de livraison signé" : `Photographier : ${DOC_TYPES[d.type].short}`}
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {blocking.length > 0 && (
+        <Button
+          variant="secondary"
+          icon={BellRing}
+          className="mt-3 h-auto min-h-11 w-full whitespace-normal py-2 text-amber-800"
+          onClick={() => {
+            actions.reportBlocked(m.id, blocking.map((d) => d.id), by, true);
+            toast("Exploitation prévenue", { message: `${blocking.length} pièce(s) attendue(s) sur ${m.ref}.` });
+          }}
+        >
+          Prévenir l&apos;exploitation
+        </Button>
+      )}
     </div>
   );
 }
@@ -566,7 +662,7 @@ function DelaySheet({ missionId, onClose }: { missionId: string; onClose: () => 
       missionId,
       type: "retard",
       description: `${reason}${comment ? ` — ${comment}` : ""}. Retard estimé : ${minutes} min.`,
-      date: new Date().toISOString(),
+      date: demoNowIso(),
       driverId: driver?.id ?? null,
       severity: minutes >= 120 ? "elevee" : minutes >= 60 ? "moyenne" : "faible",
       status: "nouveau",
@@ -619,7 +715,7 @@ function IncidentSheet({ missionId, onClose }: { missionId: string; onClose: () 
       missionId,
       type,
       description: description.trim(),
-      date: new Date().toISOString(),
+      date: demoNowIso(),
       driverId: driver?.id ?? null,
       severity,
       status: "nouveau",
@@ -664,7 +760,10 @@ export function DriverApp() {
   const { driver, current } = useDriverContext();
   const actorName = driver ? driverName(driver) : null;
   // les mises à jour faites ici sont attribuées au chauffeur
-  useLayoutEffect(() => setActor(actorName), [actorName]);
+  useLayoutEffect(() => {
+    setActor(actorName);
+    setActorRole("Chauffeur");
+  }, [actorName]);
 
   const tabs: { name: Screen["name"]; label: string; icon: typeof Home }[] = [
     { name: "home", label: "Accueil", icon: Home },

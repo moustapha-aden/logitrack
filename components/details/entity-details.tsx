@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { actions } from "@/lib/store";
 import { useData } from "@/lib/store/selectors";
+import { Can } from "@/components/auth/can";
 import { ACTIVE_STATUS, CARRIER_STATUS, COMPANY_TYPES, DRIVER_AVAILABILITY, TRUCK_STATUS, TRUCK_TYPES } from "@/lib/constants";
 import { driverName, formatDate, formatDjf, formatNumber, isActiveMission } from "@/lib/utils";
 import type { TruckStatus } from "@/types";
@@ -33,6 +34,7 @@ import { CarrierFormModal } from "@/components/forms/carrier-form";
 import { CompanyFormModal } from "@/components/forms/company-form";
 import { DriverFormModal } from "@/components/forms/driver-form";
 import { TruckFormModal } from "@/components/forms/truck-form";
+import { carrierStats, formatMinutes } from "@/lib/utils/transport";
 import { useDetail } from "./detail-provider";
 import { DetailSection, EntityLink, MiniStat, MissionRow, NotFound } from "./parts";
 
@@ -49,7 +51,7 @@ export function CompanyDetail({ id }: { id: string }) {
   const isClient = c.type === "client";
   const trucks = all.trucks.filter((t) => t.companyId === id);
   const drivers = all.drivers.filter((d) => d.companyId === id);
-  const missions = all.missions.filter((m) => (isClient ? m.clientId === id : m.companyId === id)).sort((a, b) => b.plannedDeparture.localeCompare(a.plannedDeparture));
+  const missions = all.missions.filter((m) => (isClient ? m.clientId === id : m.companyId === id) && (!scope || m.companyId === scope)).sort((a, b) => b.plannedDeparture.localeCompare(a.plannedDeparture));
   const revenue = missions.reduce((s, m) => s + m.priceDjf, 0);
 
   return (
@@ -150,7 +152,7 @@ export function CompanyDetail({ id }: { id: string }) {
 
 // ── Transporteur ─────────────────────────────────────────────
 export function CarrierDetail({ id }: { id: string }) {
-  const { all, lookups } = useData();
+  const { all, lookups, scope } = useData();
   const { open, close } = useDetail();
   const { toast } = useToast();
   const [edit, setEdit] = useState(false);
@@ -158,7 +160,11 @@ export function CarrierDetail({ id }: { id: string }) {
   const c = lookups.carrier(id);
   if (!c) return <NotFound />;
   const company = lookups.company(c.companyId);
+  if (scope && c.companyId !== scope) return <NotFound />;
   const missions = all.missions.filter((m) => m.carrierId === id);
+  const stats = carrierStats(all.requests, id);
+  // pas de suppression tant que le transporteur a des missions ou des demandes en cours
+  const busy = missions.some((m) => m.step < 6) || all.requests.some((r) => r.status === "ouverte" && r.responses.some((x) => x.carrierId === id));
 
   return (
     <div className="space-y-4 px-5 pt-14 pb-8 sm:px-6">
@@ -173,20 +179,30 @@ export function CarrierDetail({ id }: { id: string }) {
             <p className="text-sm text-slate-500">Transporteur partenaire · {c.city}</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" icon={Pencil} onClick={() => setEdit(true)}>
-            Modifier
-          </Button>
-          <Button variant="secondary" size="sm" icon={Trash2} className="text-red-600" onClick={() => setConfirm(true)}>
-            Supprimer
-          </Button>
-        </div>
+        <Can perm="fleet.edit">
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" icon={Pencil} onClick={() => setEdit(true)}>
+              Modifier
+            </Button>
+            <Button variant="secondary" size="sm" icon={Trash2} className="text-red-600" disabled={busy} title={busy ? "Missions ou demandes en cours avec ce transporteur" : undefined} onClick={() => setConfirm(true)}>
+              Supprimer
+            </Button>
+          </div>
+        </Can>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <MiniStat label="Véhicules" value={c.fleetSize} />
         <MiniStat label="Missions" value={missions.length} />
         <MiniStat label="En cours" value={missions.filter(isActiveMission).length} />
       </div>
+      <DetailSection title="Indicateurs partenaire">
+        <div className="grid grid-cols-3 gap-2">
+          <MiniStat label="Demandes reçues" value={stats.received} />
+          <MiniStat label="Taux d'acceptation" value={stats.acceptRate === null ? "—" : `${stats.acceptRate} %`} />
+          <MiniStat label="Réponse moyenne" value={<span className="text-base">{formatMinutes(stats.avgResponseMin)}</span>} />
+        </div>
+        <p className="mt-2 text-[11px] text-slate-400">Visible uniquement par l&apos;entreprise donneuse d&apos;ordre.</p>
+      </DetailSection>
       <DetailSection title="Coordonnées">
         <div className="divide-y divide-slate-100">
           <InfoRow icon={Building2} label="Responsable" value={c.manager} />
@@ -210,7 +226,7 @@ export function CarrierDetail({ id }: { id: string }) {
         open={confirm}
         onClose={() => setConfirm(false)}
         title="Supprimer ce transporteur ?"
-        message={`${c.name} sera retiré de la liste. Les missions associées seront conservées sans transporteur.`}
+        message={`${c.name} sera retiré de la liste des partenaires. Ses missions terminées, factures et demandes passées restent dans l'historique.`}
         confirmLabel="Supprimer"
         onConfirm={() => {
           actions.deleteCarrier(c.id);
@@ -224,13 +240,13 @@ export function CarrierDetail({ id }: { id: string }) {
 
 // ── Camion ───────────────────────────────────────────────────
 export function TruckDetail({ id }: { id: string }) {
-  const { all, lookups } = useData();
+  const { all, lookups, scope } = useData();
   const { open, close } = useDetail();
   const { toast } = useToast();
   const [edit, setEdit] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const t = lookups.truck(id);
-  if (!t) return <NotFound />;
+  if (!t || (scope && t.companyId !== scope)) return <NotFound />;
   const company = lookups.company(t.companyId);
   const driver = lookups.driver(t.driverId);
   const missions = all.missions.filter((m) => m.truckId === id).sort((a, b) => b.plannedDeparture.localeCompare(a.plannedDeparture));
@@ -252,6 +268,7 @@ export function TruckDetail({ id }: { id: string }) {
         </div>
       </div>
       <div className="space-y-4 px-5 py-5 sm:px-6">
+        <Can perm="fleet.edit">
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" icon={Pencil} onClick={() => setEdit(true)}>
             Modifier
@@ -275,6 +292,7 @@ export function TruckDetail({ id }: { id: string }) {
             Supprimer
           </Button>
         </div>
+        </Can>
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <MiniStat label="Capacité" value={`${t.capacityT} t`} />
@@ -338,13 +356,13 @@ export function TruckDetail({ id }: { id: string }) {
 
 // ── Chauffeur ────────────────────────────────────────────────
 export function DriverDetail({ id }: { id: string }) {
-  const { all, lookups } = useData();
+  const { all, lookups, scope } = useData();
   const { open, close } = useDetail();
   const { toast } = useToast();
   const [edit, setEdit] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const d = lookups.driver(id);
-  if (!d) return <NotFound />;
+  if (!d || (scope && d.companyId !== scope)) return <NotFound />;
   const company = lookups.company(d.companyId);
   const truck = lookups.truck(d.truckId);
   const missions = all.missions.filter((m) => m.driverId === id).sort((a, b) => b.plannedDeparture.localeCompare(a.plannedDeparture));
@@ -368,14 +386,16 @@ export function DriverDetail({ id }: { id: string }) {
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" icon={Pencil} onClick={() => setEdit(true)}>
-              Modifier
-            </Button>
-            <Button variant="secondary" size="sm" icon={Trash2} className="text-red-600" onClick={() => setConfirm(true)} disabled={!!current}>
-              Supprimer
-            </Button>
-          </div>
+          <Can perm="fleet.edit">
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" icon={Pencil} onClick={() => setEdit(true)}>
+                Modifier
+              </Button>
+              <Button variant="secondary" size="sm" icon={Trash2} className="text-red-600" onClick={() => setConfirm(true)} disabled={!!current}>
+                Supprimer
+              </Button>
+            </div>
+          </Can>
         </div>
 
         <div className="grid grid-cols-3 gap-2">

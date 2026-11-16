@@ -21,6 +21,7 @@ import { Logo } from "@/components/layout/logo";
 const SPACES = [
   { title: "Administration", desc: "Supervisez entreprises, flottes, missions, incidents et performance de l'ensemble de la plateforme.", href: "/dashboard", icon: ShieldCheck, image: "/images/port-djibouti.jpg", cta: "Ouvrir l'administration" },
   { title: "Espace entreprise", desc: "Chaque transporteur ou transitaire gère ses camions, ses chauffeurs, ses missions et ses statistiques.", href: "/entreprise", icon: Building2, image: "/images/parc-camions-corridor.jpg", cta: "Découvrir l'espace entreprise" },
+  { title: "Espace transporteur", desc: "Le partenaire reçoit les demandes par lien sécurisé, accepte, propose son camion et met à jour les étapes.", href: "/transporteur", icon: Handshake, image: "/images/truck-conteneur-plateau-corridor.jpg", cta: "Ouvrir l'espace transporteur" },
   { title: "Application chauffeur", desc: "Une interface mobile simple : mission du jour, itinéraire, chargement et mises à jour en un geste.", href: "/chauffeur", icon: Smartphone, image: "/images/truck-howo-semi-bachee.jpg", cta: "Lancer l'application" },
 ];
 
@@ -78,7 +79,7 @@ export default function LandingPage() {
           <p className="text-sm font-semibold text-brand-600">Trois espaces, une seule plateforme</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-navy-900 sm:text-4xl">Chaque acteur dispose d&apos;un espace adapté à son métier.</h2>
         </div>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {SPACES.map((s) => (
             <Link key={s.title} href={s.href} className="group overflow-hidden rounded-3xl border border-slate-200 bg-white transition hover:-translate-y-1 hover:shadow-pop">
               <div className="relative">

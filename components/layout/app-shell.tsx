@@ -3,9 +3,9 @@
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronsUpDown, FlaskConical, X } from "lucide-react";
-import { actions, setActor, useAppData } from "@/lib/store";
-import { ScopeContext, useData } from "@/lib/store/selectors";
+import { ChevronsUpDown, FlaskConical, ShieldOff, X } from "lucide-react";
+import { actions, setActor, setActorRole, useAppData } from "@/lib/store";
+import { ScopeContext, useData, usePermissions } from "@/lib/store/selectors";
 import { COMPANY_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { CompanyLogo } from "@/components/ui/media";
@@ -14,14 +14,24 @@ import { DetailProvider } from "@/components/details/detail-provider";
 import { Header } from "./header";
 import { Logo } from "./logo";
 import { ADMIN_NAV, COMPANY_NAV, type NavGroup, type NavItem } from "./nav";
+import { isBlockingOpen, isOverdue } from "@/lib/utils/documents";
+import { isOverdueInvoice } from "@/lib/utils/invoices";
 
 type Variant = "admin" | "company";
 
 function useBadgeCount(badge: NavItem["badge"]): number {
-  const { incidents, notifications, missions } = useData();
+  const { incidents, notifications, missions, documents, invoices } = useData();
   if (badge === "incidents") return incidents.filter((i) => i.status === "nouveau").length;
   if (badge === "notifications") return notifications.filter((n) => !n.read).length;
   if (badge === "delayed") return missions.filter((m) => m.delayed && m.step < 6).length;
+  if (badge === "documents") {
+    const stepOf = new Map(missions.map((m) => [m.id, m.step]));
+    return documents.filter((d) => {
+      const step = stepOf.get(d.missionId) ?? 7;
+      return step < 7 && (isOverdue(d) || d.status === "a_corriger" || (isBlockingOpen(d, step) && d.status === "recu"));
+    }).length;
+  }
+  if (badge === "invoices") return invoices.filter(isOverdueInvoice).length;
   return 0;
 }
 
@@ -46,7 +56,7 @@ function NavLink({ item, active, variant, onNavigate }: { item: NavItem; active:
       <item.icon className={cn("size-[18px] shrink-0", dark ? (active ? "text-brand-500" : "text-slate-500 group-hover:text-slate-300") : active ? "text-success-600" : "text-slate-400")} />
       <span className="flex-1 truncate">{item.label}</span>
       {count > 0 && (
-        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums", item.badge === "incidents" ? "bg-red-500 text-white" : item.badge === "delayed" ? "bg-amber-500 text-white" : dark ? "bg-brand-600 text-white" : "bg-brand-600 text-white")}>{count}</span>
+        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums", item.badge === "incidents" || item.badge === "documents" || item.badge === "invoices" ? "bg-red-500 text-white" : item.badge === "delayed" ? "bg-amber-500 text-white" : dark ? "bg-brand-600 text-white" : "bg-brand-600 text-white")}>{count}</span>
       )}
     </Link>
   );
@@ -91,8 +101,22 @@ function CompanySwitcher() {
   );
 }
 
-function Sidebar({ variant, groups, onNavigate }: { variant: Variant; groups: NavGroup[]; onNavigate: () => void }) {
+/** Compte désactivé : l'accès est retiré immédiatement, même pour une session ouverte. */
+function AccessRevoked({ name }: { name?: string }) {
+  return (
+    <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center shadow-card">
+      <ShieldOff className="mx-auto size-10 text-red-400" />
+      <h1 className="mt-4 text-lg font-semibold">Accès retiré</h1>
+      <p className="mt-1 text-sm text-slate-500">Le compte {name ? `de ${name} ` : ""}a été désactivé par l&apos;administrateur de l&apos;entreprise. Changez d&apos;utilisateur depuis le menu du profil (simulation).</p>
+    </div>
+  );
+}
+
+function Sidebar({ variant, groups: allGroups, onNavigate }: { variant: Variant; groups: NavGroup[]; onNavigate: () => void }) {
   const pathname = usePathname();
+  const { can } = usePermissions();
+  // le menu n'affiche que les entrées autorisées pour le rôle courant
+  const groups = allGroups.map((g) => ({ ...g, items: g.items.filter((it) => !it.perm || can(it.perm)) })).filter((g) => g.items.length > 0);
   const dark = variant === "admin";
   const isActive = (href: string) => (href === "/entreprise" || href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`));
 
@@ -138,9 +162,12 @@ function ShellInner({ variant, children }: { variant: Variant; children: ReactNo
   const groups = variant === "admin" ? ADMIN_NAV : COMPANY_NAV;
   const company = data.companies.find((c) => c.id === data.prefs.companyId);
   const close = () => setMobileOpen(false);
-  const actorName = variant === "admin" ? data.settings.userName : `Exploitation ${company?.initials ?? ""}`;
-  // auteur des actions (activité, historique) selon l'espace affiché
-  useLayoutEffect(() => setActor(actorName), [actorName]);
+  const perms = usePermissions();
+  // auteur et rôle des actions (activité, historique, journal d'audit) selon l'utilisateur courant
+  useLayoutEffect(() => {
+    setActor(perms.actor);
+    setActorRole(perms.roleLabel);
+  }, [perms.actor, perms.roleLabel]);
 
   return (
     <div className="min-h-screen">
@@ -161,13 +188,13 @@ function ShellInner({ variant, children }: { variant: Variant; children: ReactNo
       <div className="lg:pl-[264px]">
         <Header
           onMenu={() => setMobileOpen(true)}
-          userName={variant === "admin" ? data.settings.userName : (company?.manager ?? "")}
-          userRole={variant === "admin" ? "Administrateur plateforme" : `Responsable · ${company?.initials ?? ""}`}
+          userName={variant === "admin" ? data.settings.userName : (perms.user?.name ?? company?.manager ?? "")}
+          userRole={variant === "admin" ? "Administrateur plateforme" : `${perms.roleLabel} · ${company?.initials ?? ""}`}
           userColor={variant === "admin" ? "#101E35" : (company?.color ?? "#0F9F83")}
           notificationsHref={variant === "admin" ? "/notifications" : "/entreprise/notifications"}
           variant={variant}
         />
-        <main className="mx-auto w-full max-w-[1440px] animate-fade-in px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1440px] animate-fade-in px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{perms.active ? children : <AccessRevoked name={perms.user?.name} />}</main>
       </div>
     </div>
   );

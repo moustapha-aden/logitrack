@@ -9,6 +9,9 @@ import {
   Building2,
   CheckCheck,
   ChevronDown,
+  FileText,
+  Handshake,
+  Receipt,
   Home,
   IdCard,
   LogOut,
@@ -20,7 +23,8 @@ import {
   Smartphone,
   Truck,
 } from "lucide-react";
-import { actions } from "@/lib/store";
+import { ROLES } from "@/lib/permissions";
+import { actions, useAppData } from "@/lib/store";
 import { useData } from "@/lib/store/selectors";
 import { NOTIFICATION_KINDS } from "@/lib/constants";
 import { placeName } from "@/lib/data/geo";
@@ -183,7 +187,7 @@ function NotificationsMenu({ allHref }: { allHref?: string }) {
                 className={cn("flex w-full gap-3 rounded-xl px-2.5 py-2.5 text-left transition hover:bg-slate-50", !n.read && "bg-brand-50/40")}
               >
                 <span className={cn("mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg", toneSoftBg[NOTIFICATION_KINDS[n.kind].tone])}>
-                  {n.kind === "incident" || n.kind === "retard" ? <AlertTriangle className="size-4" /> : n.kind === "flotte" ? <Truck className="size-4" /> : n.kind === "mission" ? <Route className="size-4" /> : <Bell className="size-4" />}
+                  {n.kind === "incident" || n.kind === "retard" ? <AlertTriangle className="size-4" /> : n.kind === "flotte" ? <Truck className="size-4" /> : n.kind === "mission" ? <Route className="size-4" /> : n.kind === "document" ? <FileText className="size-4" /> : n.kind === "transport" ? <Handshake className="size-4" /> : n.kind === "facture" ? <Receipt className="size-4" /> : <Bell className="size-4" />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-start justify-between gap-2">
@@ -204,6 +208,37 @@ function NotificationsMenu({ allHref }: { allHref?: string }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Utilisateur simulé (rôle) dans l'espace entreprise ───────
+function UserSwitcher({ onDone }: { onDone: () => void }) {
+  const data = useAppData();
+  const team = data.users.filter((u) => u.companyId === data.prefs.companyId);
+  const current = team.find((u) => u.id === data.prefs.userId) ?? team.find((u) => u.role === "admin");
+  if (team.length === 0) return null;
+  return (
+    <div className="border-b border-slate-100 px-3 py-2.5">
+      <label className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase" htmlFor="user-switch">
+        Se connecter en tant que
+      </label>
+      <select
+        id="user-switch"
+        value={current?.id}
+        onChange={(e) => {
+          actions.login(e.target.value);
+          onDone();
+        }}
+        className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm"
+      >
+        {team.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name} — {ROLES[u.role].label}
+            {u.active ? "" : " (désactivé)"}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -237,6 +272,7 @@ function UserMenu({ name, role, color, variant }: { name: string; role: string; 
             <p className="text-sm font-semibold">{name}</p>
             <p className="text-xs text-slate-500">{role}</p>
           </div>
+          {variant === "company" && <UserSwitcher onDone={() => setPopOpen(false)} />}
           <p className="px-3 pt-2.5 pb-1 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Changer d&apos;espace</p>
           {items.map((it) => (
             <Link key={it.href} href={it.href} onClick={() => setPopOpen(false)} className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-ink">

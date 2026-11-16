@@ -120,6 +120,119 @@ export interface Mission {
   priceDjf: number;
   history: StepEvent[];
   createdAt: string;
+  /** Camion et chauffeur fournis par un transporteur partenaire (au lieu de la flotte propre). */
+  carrierAssignment?: CarrierAssignment | null;
+  /** Partage avec le client : lien de suivi et notifications. */
+  clientShare?: ClientShare | null;
+}
+
+// ── Factures et paiements (suivi, sans manipulation de fonds) ─
+/** client = à encaisser ; transporteur = à payer ; debours = frais avancés pour le client, à refacturer. */
+export type InvoiceFlow = "client" | "transporteur" | "debours";
+/** « En retard » n'est pas stocké : il est calculé à partir de l'échéance. */
+export type InvoiceStatus = "brouillon" | "emise" | "envoyee" | "partielle" | "payee" | "contestee" | "annulee";
+export type Currency = "DJF" | "USD" | "ETB" | "EUR";
+export type PaymentMode = "virement" | "especes" | "cheque" | "mobile_money";
+
+export interface Payment {
+  id: string;
+  at: string;
+  amount: number;
+  mode: PaymentMode;
+  reference?: string;
+  by: string;
+}
+
+export interface Invoice {
+  id: string;
+  ref: string; // n° de facture ou de reçu
+  missionId: string;
+  flow: InvoiceFlow;
+  label: string; // objet : prestation, droits et taxes, magasinage…
+  /** Entreprise cliente (flux client), transporteur (flux transporteur) ou fournisseur payé (débours). */
+  counterpartyId: string | null;
+  counterpartyName: string;
+  amount: number;
+  currency: Currency;
+  issuedAt: string;
+  dueAt: string;
+  status: InvoiceStatus;
+  payments: Payment[];
+  attachment?: { fileName: string; sizeKb: number; at: string };
+  /** Débours : refacturé au client (n° de la facture client concernée). */
+  rebilledOn?: string | null;
+  note?: string; // motif de contestation ou d'annulation
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Partage avec le client ───────────────────────────────────
+export interface ClientEmail {
+  at: string;
+  step: OperationStep;
+  to: string;
+}
+
+export interface ClientShare {
+  token: string;
+  createdAt: string;
+  expiresAt: string;
+  revoked: boolean;
+  /** Réglages de visibilité choisis par le transitaire. */
+  showPlate: boolean;
+  showDriver: boolean;
+  /** Message rédigé pour le client (incident, retard, information). */
+  publicNote?: string;
+  publicNoteAt?: string;
+  notifyEmail: string;
+  notifySteps: OperationStep[];
+  sentEmails: ClientEmail[];
+}
+
+// ── Coordination transitaire ↔ transporteur ──────────────────
+export interface CarrierAssignment {
+  plate: string;
+  driverName: string;
+  driverPhone: string;
+}
+
+/** ouverte → confirmée ; ou annulée. L'expiration est calculée à partir de la date limite. */
+export type RequestStatus = "ouverte" | "confirmee" | "annulee";
+export type ResponseStatus = "envoyee" | "vue" | "acceptee" | "refusee";
+
+export interface CarrierResponse {
+  carrierId: string;
+  status: ResponseStatus;
+  seenAt?: string;
+  answeredAt?: string;
+  proposal?: CarrierAssignment;
+  reason?: string; // motif de refus
+}
+
+export interface TransportRequest {
+  id: string;
+  ref: string;
+  missionId: string;
+  companyId: string;
+  createdAt: string;
+  createdBy: string;
+  deadline: string; // date limite de réponse
+  instructions?: string;
+  status: RequestStatus;
+  responses: CarrierResponse[];
+  confirmedCarrierId?: string | null;
+  closedAt?: string;
+}
+
+export type MessageRole = "exploitation" | "transporteur" | "chauffeur";
+
+export interface MissionMessage {
+  id: string;
+  missionId: string;
+  at: string;
+  author: string;
+  role: MessageRole;
+  text: string;
 }
 
 export interface Load {
@@ -163,7 +276,58 @@ export interface Incident {
   reportedBy: string;
 }
 
-export type NotificationKind = "mission" | "incident" | "retard" | "flotte" | "systeme";
+// ── Documents de transit ─────────────────────────────────────
+export type DocCategory = "commercial" | "maritime" | "douane" | "certificat" | "transport" | "livraison";
+
+export type DocType =
+  | "facture_commerciale"
+  | "liste_colisage"
+  | "connaissement"
+  | "delivery_order"
+  | "declaration_douane"
+  | "bon_a_enlever"
+  | "bon_sortie_port"
+  | "doc_transit_ethiopie"
+  | "certificat_origine"
+  | "autorisation_md"
+  | "ordre_mission"
+  | "interchange_eir"
+  | "pod";
+
+/** Cycle de vie : attendu → reçu → vérifié → validé ; exception : à corriger. */
+export type DocStatus = "attendu" | "recu" | "verifie" | "valide" | "a_corriger";
+
+export type DocParty = "client" | "transitaire" | "transporteur" | "chauffeur";
+
+/** Destinataires avec qui la pièce est partagée (vide = interne). */
+export type DocAudience = "transporteur" | "client";
+
+export interface DocVersion {
+  at: string; // ISO
+  by: string;
+  fileName: string;
+  sizeKb: number;
+}
+
+export interface MissionDocument {
+  id: string;
+  missionId: string;
+  type: DocType;
+  status: DocStatus;
+  responsible: DocParty;
+  /** Étape qui ne peut pas être franchie tant que la pièce n'est pas vérifiée ou validée. */
+  blocksStep: OperationStep | null;
+  dueAt: string | null; // ISO
+  sharedWith: DocAudience[];
+  versions: DocVersion[];
+  note?: string; // motif de correction ou commentaire
+  requestedAt?: string; // dernière relance
+  /** Dernier signalement « chauffeur / transporteur bloqué par cette pièce ». */
+  blockedNotifiedAt?: string;
+  updatedAt: string;
+}
+
+export type NotificationKind = "mission" | "incident" | "retard" | "flotte" | "systeme" | "document" | "transport" | "facture";
 
 export interface AppNotification {
   id: string;
@@ -173,6 +337,8 @@ export interface AppNotification {
   at: string;
   read: boolean;
   companyId?: string;
+  /** Destinataire transporteur partenaire (espace transporteur). */
+  carrierId?: string;
   link?: EntityRef;
 }
 
@@ -207,9 +373,40 @@ export interface Settings {
   compactTables: boolean;
 }
 
+// ── Utilisateurs de l'espace entreprise et audit ─────────────
+export type CompanyRole = "admin" | "operateur" | "comptabilite" | "lecture";
+
+export interface CompanyUser {
+  id: string;
+  companyId: string;
+  name: string;
+  email: string;
+  role: CompanyRole;
+  active: boolean;
+  twoFactor: boolean;
+  lastLoginAt?: string;
+  createdAt: string;
+}
+
+export type AuditAction = "connexion" | "statut" | "document" | "facture" | "partage" | "droits" | "export" | "modification";
+
+/** Journal non modifiable : aucune action ne permet d'en supprimer une ligne. */
+export interface AuditEntry {
+  id: string;
+  at: string;
+  actor: string;
+  role: string;
+  companyId?: string;
+  action: AuditAction;
+  text: string;
+  link?: EntityRef;
+}
+
 export interface Prefs {
   companyId: string; // entreprise sélectionnée dans l'espace entreprise
   driverId: string; // chauffeur sélectionné dans l'espace chauffeur
+  carrierId: string; // transporteur simulé dans l'espace transporteur
+  userId: string; // utilisateur simulé dans l'espace entreprise (détermine le rôle)
 }
 
 export interface MonthlyStat {
@@ -230,6 +427,12 @@ export interface AppData {
   missions: Mission[];
   loads: Load[];
   incidents: Incident[];
+  documents: MissionDocument[];
+  requests: TransportRequest[];
+  messages: MissionMessage[];
+  invoices: Invoice[];
+  users: CompanyUser[];
+  audit: AuditEntry[];
   notifications: AppNotification[];
   activity: ActivityItem[];
   monthly: MonthlyStat[];

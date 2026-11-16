@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AlertOctagon, AlertTriangle, CheckCircle2, Clock, Eye, Loader, Plus, Timer, Trash2, Wrench } from "lucide-react";
 import { actions } from "@/lib/store";
-import { useData } from "@/lib/store/selectors";
+import { useData, usePermissions } from "@/lib/store/selectors";
 import { INCIDENT_STATUS, INCIDENT_TYPES, SEVERITY } from "@/lib/constants";
 import { driverName, formatDateTime, includesText } from "@/lib/utils";
 import type { Incident, IncidentStatus, IncidentType, Severity } from "@/types";
@@ -23,6 +23,7 @@ const typeIcon: Record<IncidentType, typeof Wrench> = { panne: Wrench, accident:
 
 export function IncidentsView() {
   const { incidents, lookups, scope } = useData();
+  const perms = usePermissions();
   const { open } = useDetail();
   const { toast } = useToast();
   const [q, setQ] = useState("");
@@ -77,10 +78,10 @@ export function IncidentsView() {
         <ActionMenu
           items={[
             { label: "Voir le détail", icon: Eye, onClick: () => open({ kind: "incident", id: i.id }) },
-            i.status === "nouveau" && { label: "Prendre en charge", icon: Loader, onClick: () => setIncStatus(i, "en_cours") },
-            i.status !== "resolu" && { label: "Marquer comme résolu", icon: CheckCircle2, onClick: () => setIncStatus(i, "resolu") },
-            i.status === "resolu" && { label: "Rouvrir", icon: AlertTriangle, onClick: () => setIncStatus(i, "en_cours") },
-            { label: "Supprimer", icon: Trash2, danger: true, onClick: () => setDel(i) },
+            perms.can("incident.report") && i.status === "nouveau" && { label: "Prendre en charge", icon: Loader, onClick: () => setIncStatus(i, "en_cours") },
+            perms.can("incident.report") && i.status !== "resolu" && { label: "Marquer comme résolu", icon: CheckCircle2, onClick: () => setIncStatus(i, "resolu") },
+            perms.can("incident.report") && i.status === "resolu" && { label: "Rouvrir", icon: AlertTriangle, onClick: () => setIncStatus(i, "en_cours") },
+            perms.can("incident.report") && { label: "Supprimer", icon: Trash2, danger: true, onClick: () => setDel(i) },
           ]}
         />
       ),
@@ -94,6 +95,7 @@ export function IncidentsView() {
         title="Incidents et retards"
         description={scope ? "Déclarez et suivez les incidents survenus sur vos missions." : "Centralisez les déclarations d'incidents et de retards, et suivez leur résolution."}
         actions={
+          perms.can("incident.report") && (
           <>
             <Button variant="secondary" icon={Clock} onClick={() => setDeclare("retard")}>
               Signaler un retard
@@ -102,6 +104,7 @@ export function IncidentsView() {
               Déclarer un incident
             </Button>
           </>
+          )
         }
       />
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -130,7 +133,7 @@ export function IncidentsView() {
         </Toolbar>
         <DataTable columns={columns} rows={rows} onRowClick={(i) => open({ kind: "incident", id: i.id })} emptyTitle="Aucun incident" emptyMessage="Aucun incident ne correspond à ces critères." />
       </Card>
-      <IncidentFormModal open={!!declare} type={declare ?? undefined} onClose={() => setDeclare(null)} reportedBy={scope ? `Exploitation ${lookups.company(scope)?.initials ?? ""}` : undefined} />
+      <IncidentFormModal open={!!declare} type={declare ?? undefined} onClose={() => setDeclare(null)} reportedBy={scope ? perms.actor : undefined} />
       <ConfirmDialog
         open={!!del}
         onClose={() => setDel(null)}

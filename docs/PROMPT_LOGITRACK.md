@@ -261,6 +261,6 @@ public/images/        21 photos + credits.json
 - Lancer : `npm run dev`, puis http://localhost:3000.
 - Démonstration conseillée : voir le README (5 étapes).
 - Réinitialiser les données : Paramètres → « Réinitialiser la démonstration », ou vider `localStorage`.
-- Si tu modifies la structure des données ou le jeu initial, incrémente `DATA_VERSION` dans `seed.ts` (actuellement **5**).
+- Si tu modifies la structure des données ou le jeu initial, incrémente `DATA_VERSION` dans `seed.ts` (actuellement **6**).
 - Pour une vraie version : remplacer le store par une API et une base de données, ajouter l'authentification et les rôles, un fournisseur de cartes avec GPS réel, et des photos sans marques visibles.
 - Respecter les conventions : composants typés sans `any`, textes en français, montants en DJF, dates en fuseau Africa/Djibouti, réutilisation des composants `ui/` et du `DataTable`.
